@@ -76,8 +76,9 @@ val adaptersReobf = configurations.create("adaptersReobf") {
     attributes {
         attribute(Obfuscation.OBFUSCATION_ATTRIBUTE, objects.named(Obfuscation.OBFUSCATED))
     }
-    extendsFrom(adapters)
 }
+
+val mojmapOnlyAdapters = setOf("adapter-26_1_2")
 
 allprojects {
     configurations.configureEach {
@@ -117,6 +118,9 @@ dependencies {
 
     project.project(":worldedit-bukkit:adapters").subprojects.forEach {
         "adapters"(project(it.path))
+        if (it.name !in mojmapOnlyAdapters) {
+            "adaptersReobf"(project(it.path))
+        }
     }
     compileOnly(libs.worldguard) {
         exclude("com.sk89q.worldedit", "worldedit-bukkit")
@@ -279,6 +283,7 @@ publishMods {
     // of minecraft version.
     val mojmapPaperVersions = listOf("1.20.6", "1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10",
             "1.21.11")
+    val foliaMojmapVersions = listOf("26.1.2")
     val spigotMappedPaperVersions = listOf("1.20.2", "1.20.4")
 
     // Mark reobfJar as spigot only for 1.20.5+
@@ -301,7 +306,7 @@ publishMods {
     modrinth {
         from(common)
         file = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile }
-        minecraftVersions = mojmapPaperVersions
+        minecraftVersions = mojmapPaperVersions + foliaMojmapVersions
         modLoaders = listOf("paper")
     }
 

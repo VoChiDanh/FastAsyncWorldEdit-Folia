@@ -463,6 +463,13 @@ public class Fawe {
     }
 
     /**
+     * Sets the thread FAWE should treat as the platform tick thread.
+     */
+    public Thread setMainThread(Thread thread) {
+        return this.thread = thread;
+    }
+
+    /**
      * Gets the executor used for clipboard IO if clipboard on disk is enabled or null
      *
      * @return Executor used for clipboard IO if clipboard on disk is enabled or null

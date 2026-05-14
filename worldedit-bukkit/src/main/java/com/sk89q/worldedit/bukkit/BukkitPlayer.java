@@ -21,6 +21,7 @@ package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.core.configuration.Caption;
 import com.fastasyncworldedit.core.configuration.Settings;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.sk89q.util.StringUtil;
 import com.sk89q.wepif.VaultResolver;
@@ -72,6 +73,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 public class BukkitPlayer extends AbstractPlayerActor {
 
@@ -161,9 +163,9 @@ public class BukkitPlayer extends AbstractPlayerActor {
     //FAWE start
     @Override
     public void giveItem(BaseItemStack itemStack) {
-        final PlayerInventory inv = player.getInventory();
         ItemStack newItem = BukkitAdapter.adapt(itemStack);
-        TaskManager.taskManager().sync(() -> {
+        syncEntity(() -> {
+            final PlayerInventory inv = player.getInventory();
             if (itemStack.getType().id().equalsIgnoreCase(WorldEdit.getInstance().getConfiguration().wandItem)) {
                 inv.remove(newItem);
             }
@@ -192,47 +194,62 @@ public class BukkitPlayer extends AbstractPlayerActor {
     @Deprecated
     @Override
     public void printRaw(String msg) {
-        for (String part : msg.split("\n")) {
-            player.sendMessage(part);
-        }
+        syncEntity(() -> {
+            for (String part : msg.split("\n")) {
+                player.sendMessage(part);
+            }
+            return null;
+        });
     }
 
     @Deprecated
     @Override
     public void print(String msg) {
-        for (String part : msg.split("\n")) {
-            player.sendMessage("§d" + part);
-        }
+        syncEntity(() -> {
+            for (String part : msg.split("\n")) {
+                player.sendMessage("§d" + part);
+            }
+            return null;
+        });
     }
 
     @Deprecated
     @Override
     public void printDebug(String msg) {
-        for (String part : msg.split("\n")) {
-            player.sendMessage("§7" + part);
-        }
+        syncEntity(() -> {
+            for (String part : msg.split("\n")) {
+                player.sendMessage("§7" + part);
+            }
+            return null;
+        });
     }
 
     @Deprecated
     @Override
     public void printError(String msg) {
-        for (String part : msg.split("\n")) {
-            player.sendMessage("§c" + part);
-        }
+        syncEntity(() -> {
+            for (String part : msg.split("\n")) {
+                player.sendMessage("§c" + part);
+            }
+            return null;
+        });
     }
 
     @Override
     public void print(Component component) {
-        //FAWE start - Add FAWE prefix to all messages
-        component = Caption.color(TranslatableComponent.of("prefix", component), getLocale());
-        //FAWE end
-        TextAdapter.sendMessage(player, WorldEditText.format(component, getLocale()));
+        syncEntity(() -> {
+            //FAWE start - Add FAWE prefix to all messages
+            Component finalComponent = Caption.color(TranslatableComponent.of("prefix", component), getLocale());
+            //FAWE end
+            TextAdapter.sendMessage(player, WorldEditText.format(finalComponent, getLocale()));
+            return null;
+        });
     }
 
     @Override
     public boolean trySetPosition(Vector3 pos, float pitch, float yaw) {
         //FAWE start
-        org.bukkit.World world = player.getWorld();
+        org.bukkit.World world = null;
         if (pos instanceof com.sk89q.worldedit.util.Location) {
             com.sk89q.worldedit.util.Location loc = (com.sk89q.worldedit.util.Location) pos;
             Extent extent = loc.getExtent();
@@ -240,16 +257,19 @@ public class BukkitPlayer extends AbstractPlayerActor {
                 world = Bukkit.getWorld(((World) extent).getName());
             }
         }
+        if (world == null) {
+            world = syncEntity(player::getWorld);
+        }
         org.bukkit.World finalWorld = world;
         //FAWE end
-        return TaskManager.taskManager().sync(() -> player.teleport(new Location(
+        return FoliaSupport.teleport(plugin, player, new Location(
                 finalWorld,
                 pos.x(),
                 pos.y(),
                 pos.z(),
                 yaw,
                 pitch
-        )));
+        ));
     }
 
     @Override
@@ -264,19 +284,21 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public GameMode getGameMode() {
-        return GameModes.get(player.getGameMode().name().toLowerCase(Locale.ROOT));
+        return GameModes.get(syncEntity(player::getGameMode).name().toLowerCase(Locale.ROOT));
     }
 
     @Override
     public void setGameMode(GameMode gameMode) {
-        player.setGameMode(org.bukkit.GameMode.valueOf(gameMode.id().toUpperCase(Locale.ROOT)));
+        syncEntity(() -> {
+            player.setGameMode(org.bukkit.GameMode.valueOf(gameMode.id().toUpperCase(Locale.ROOT)));
+            return null;
+        });
     }
 
     @Override
     public boolean hasPermission(String perm) {
-        return (!plugin.getLocalConfiguration().noOpPermissions && player.isOp())
-                || plugin.getPermissionsResolver().hasPermission(
-                player.getWorld().getName(), player, perm);
+        return syncEntity(() -> (!plugin.getLocalConfiguration().noOpPermissions && player.isOp())
+                || plugin.getPermissionsResolver().hasPermission(player.getWorld().getName(), player, perm));
     }
 
     //FAWE start
@@ -317,7 +339,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public World getWorld() {
-        return BukkitAdapter.adapt(player.getWorld());
+        return BukkitAdapter.adapt(syncEntity(player::getWorld));
     }
 
     @Override
@@ -327,7 +349,11 @@ public class BukkitPlayer extends AbstractPlayerActor {
         if (params.length > 0) {
             send = send + "|" + StringUtil.joinString(params, "|");
         }
-        player.sendPluginMessage(plugin, WorldEditPlugin.CUI_PLUGIN_CHANNEL, send.getBytes(StandardCharsets.UTF_8));
+        String finalSend = send;
+        syncEntity(() -> {
+            player.sendPluginMessage(plugin, WorldEditPlugin.CUI_PLUGIN_CHANNEL, finalSend.getBytes(StandardCharsets.UTF_8));
+            return null;
+        });
     }
 
     public Player getPlayer() {
@@ -336,12 +362,15 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public boolean isAllowedToFly() {
-        return player.getAllowFlight();
+        return syncEntity(player::getAllowFlight);
     }
 
     @Override
     public void setFlying(boolean flying) {
-        player.setFlying(flying);
+        syncEntity(() -> {
+            player.setFlying(flying);
+            return null;
+        });
     }
 
     @Override
@@ -351,10 +380,10 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public com.sk89q.worldedit.util.Location getLocation() {
-        Location nativeLocation = player.getLocation();
+        Location nativeLocation = syncEntity(player::getLocation);
         Vector3 position = BukkitAdapter.asVector(nativeLocation);
         return new com.sk89q.worldedit.util.Location(
-                getWorld(),
+                BukkitAdapter.adapt(nativeLocation.getWorld()),
                 position,
                 nativeLocation.getYaw(),
                 nativeLocation.getPitch()
@@ -363,12 +392,12 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public boolean setLocation(com.sk89q.worldedit.util.Location location) {
-        return player.teleport(BukkitAdapter.adapt(location));
+        return FoliaSupport.teleport(plugin, player, BukkitAdapter.adapt(location));
     }
 
     @Override
     public Locale getLocale() {
-        return TextUtils.getLocaleByMinecraftTag(player.getLocale());
+        return TextUtils.getLocaleByMinecraftTag(syncEntity(player::getLocale));
     }
 
     @Override
@@ -435,22 +464,25 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public <B extends BlockStateHolder<B>> void sendFakeBlock(BlockVector3 pos, B block) {
-        Location loc = new Location(player.getWorld(), pos.x(), pos.y(), pos.z());
-        if (block == null) {
-            player.sendBlockChange(loc, player.getWorld().getBlockAt(loc).getBlockData());
-        } else {
-            player.sendBlockChange(loc, BukkitAdapter.adapt(block));
-            BukkitImplAdapter adapter = WorldEditPlugin.getInstance().getBukkitImplAdapter();
-            if (adapter != null) {
-                if (block.getBlockType() == BlockTypes.STRUCTURE_BLOCK && block instanceof BaseBlock) {
-                    LinCompoundTag nbt = ((BaseBlock) block).getNbt();
-                    if (nbt != null) {
-                        adapter.sendFakeNBT(player, pos, nbt);
-                        adapter.sendFakeOP(player);
+        syncEntity(() -> {
+            Location loc = new Location(player.getWorld(), pos.x(), pos.y(), pos.z());
+            if (block == null) {
+                player.sendBlockChange(loc, player.getWorld().getBlockAt(loc).getBlockData());
+            } else {
+                player.sendBlockChange(loc, BukkitAdapter.adapt(block));
+                BukkitImplAdapter adapter = WorldEditPlugin.getInstance().getBukkitImplAdapter();
+                if (adapter != null) {
+                    if (block.getBlockType() == BlockTypes.STRUCTURE_BLOCK && block instanceof BaseBlock) {
+                        LinCompoundTag nbt = ((BaseBlock) block).getNbt();
+                        if (nbt != null) {
+                            adapter.sendFakeNBT(player, pos, nbt);
+                            adapter.sendFakeOP(player);
+                        }
                     }
                 }
             }
-        }
+            return null;
+        });
     }
 
     //FAWE start
@@ -458,7 +490,10 @@ public class BukkitPlayer extends AbstractPlayerActor {
     public void sendTitle(Component title, Component sub) {
         String titleStr = WorldEditText.reduceToText(title, getLocale());
         String subStr = WorldEditText.reduceToText(sub, getLocale());
-        player.sendTitle(titleStr, subStr, 0, 70, 20);
+        syncEntity(() -> {
+            player.sendTitle(titleStr, subStr, 0, 70, 20);
+            return null;
+        });
     }
 
     @Override
@@ -468,4 +503,11 @@ public class BukkitPlayer extends AbstractPlayerActor {
         super.unregister();
     }
     //FAWE end
+
+    private <T> T syncEntity(Supplier<T> supplier) {
+        if (FoliaSupport.isFolia()) {
+            return FoliaSupport.callAtEntity(plugin, player, supplier);
+        }
+        return TaskManager.taskManager().sync(supplier);
+    }
 }

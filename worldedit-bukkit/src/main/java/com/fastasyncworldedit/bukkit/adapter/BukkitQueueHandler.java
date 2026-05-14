@@ -31,10 +31,10 @@ public class BukkitQueueHandler extends QueueHandler {
     @Override
     public void startUnsafe(boolean parallel) {
         ChunkListener.physicsFreeze = true;
-        if (parallel) {
+        if (parallel && asyncCatcher != null) {
             try {
                 asyncCatcher.setBoolean(asyncCatcher, false);
-                timingsEnabled = Timings.isTimingsEnabled();
+                timingsEnabled = timingsCheck != null && Timings.isTimingsEnabled();
                 if (timingsEnabled) {
                     if (alertTimingsChange) {
                         alertTimingsChange = false;
@@ -51,10 +51,10 @@ public class BukkitQueueHandler extends QueueHandler {
     @Override
     public void endUnsafe(boolean parallel) {
         ChunkListener.physicsFreeze = false;
-        if (parallel) {
+        if (parallel && asyncCatcher != null) {
             try {
                 asyncCatcher.setBoolean(asyncCatcher, true);
-                if (timingsEnabled) {
+                if (timingsEnabled && timingsCheck != null) {
                     Timings.setTimingsEnabled(true);
                     timingsCheck.invoke(null);
                 }

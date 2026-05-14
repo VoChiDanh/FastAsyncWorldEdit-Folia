@@ -20,6 +20,7 @@
 package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.platform.AbstractCommandBlockActor;
 import com.sk89q.worldedit.session.SessionKey;
@@ -191,7 +192,14 @@ public class BukkitBlockCommandSender extends AbstractCommandBlockActor {
 
             @Override
             public boolean isActive() {
-                if (Bukkit.isPrimaryThread()) {
+                Block block = sender.getBlock();
+                if (FoliaSupport.isFolia()) {
+                    if (FoliaSupport.isOwnedByCurrentRegion(block)) {
+                        updateActive();
+                    } else {
+                        FoliaSupport.runAtBlock(plugin, block, this::updateActive);
+                    }
+                } else if (Bukkit.isPrimaryThread()) {
                     // we can update eagerly
                     updateActive();
                 } else {

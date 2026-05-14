@@ -40,8 +40,11 @@ public class BukkitImplLoader {
 
     private static final Logger LOGGER = LogManagerCompat.getLogger();
     private final List<String> adapterCandidates = new ArrayList<>();
-    private final String minorMCVersion = String.valueOf(MinecraftVersion.getCurrent().getMinor());
+    private final MinecraftVersion currentVersion = MinecraftVersion.getCurrent();
+    private final String exactMCVersion = "v" + currentVersion.getMajor() + "_" + currentVersion.getMinor() + "_" + currentVersion.getRelease();
+    private final String minorMCVersion = String.valueOf(currentVersion.getMinor());
     private int zeroth = 0;
+    private int preferredCandidates = 0;
     private String customCandidate;
 
     private static final String SEARCH_PACKAGE = "com.sk89q.worldedit.bukkit.adapter.impl.fawe";
@@ -105,11 +108,7 @@ public class BukkitImplLoader {
                 int beginIndex = 0;
                 int endIndex = className.length() - CLASS_SUFFIX.length();
                 className = className.substring(beginIndex, endIndex);
-                if (className.contains(minorMCVersion)) {
-                    adapterCandidates.add(zeroth, className);
-                } else {
-                    adapterCandidates.add(className);
-                }
+                addAdapterCandidate(className);
             }
         } finally {
             closer.close();
@@ -150,11 +149,18 @@ public class BukkitImplLoader {
             int beginIndex = 0;
             int endIndex = resource.length() - CLASS_SUFFIX.length();
             String className = resource.substring(beginIndex, endIndex);
-            if (className.contains(minorMCVersion)) {
-                adapterCandidates.add(zeroth, className);
-            } else {
-                adapterCandidates.add(className);
-            }
+            addAdapterCandidate(className);
+        }
+    }
+
+    private void addAdapterCandidate(String className) {
+        if (className.contains(exactMCVersion)) {
+            adapterCandidates.add(zeroth + preferredCandidates, className);
+            preferredCandidates++;
+        } else if (currentVersion.getMajor() == 1 && className.contains(minorMCVersion)) {
+            adapterCandidates.add(zeroth + preferredCandidates, className);
+        } else {
+            adapterCandidates.add(className);
         }
     }
 
@@ -169,6 +175,9 @@ public class BukkitImplLoader {
         final ClassLoader classLoader = this.getClass().getClassLoader();
         for (String className : adapterCandidates) {
             try {
+                if (!className.equals(customCandidate) && currentVersion.getMajor() != 1 && !className.contains(exactMCVersion)) {
+                    continue;
+                }
                 Class<?> cls = Class.forName(className, false, classLoader);
                 if (cls.isSynthetic()) {
                     continue;

@@ -16,6 +16,7 @@ tasks
             "processing", "path", "fallthrough", "serial", "overloads", "this-escape",
         )
         sourceCompatibility = "21"
+        targetCompatibility = "21"
         options.compilerArgs.addAll(listOf("-Xlint:all") + disabledLint.map { "-Xlint:-$it" })
         options.isDeprecation = true
         options.encoding = "UTF-8"

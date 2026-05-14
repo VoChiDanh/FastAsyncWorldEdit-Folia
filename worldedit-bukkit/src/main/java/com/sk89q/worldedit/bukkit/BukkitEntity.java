@@ -20,6 +20,7 @@
 package com.sk89q.worldedit.bukkit;
 
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.entity.BaseEntity;
 import com.sk89q.worldedit.entity.Entity;
@@ -64,7 +65,7 @@ public class BukkitEntity implements Entity {
     public Extent getExtent() {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return BukkitAdapter.adapt(entity.getWorld());
+            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getWorld()));
         } else {
             return NullWorld.getInstance();
         }
@@ -74,7 +75,7 @@ public class BukkitEntity implements Entity {
     public Location getLocation() {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return BukkitAdapter.adapt(entity.getLocation());
+            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getLocation()));
         } else {
             return new Location(NullWorld.getInstance());
         }
@@ -84,7 +85,7 @@ public class BukkitEntity implements Entity {
     public boolean setLocation(Location location) {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return entity.teleport(BukkitAdapter.adapt(location));
+            return FoliaSupport.teleport(WorldEditPlugin.getInstance(), entity, BukkitAdapter.adapt(location));
         } else {
             return false;
         }
@@ -113,19 +114,25 @@ public class BukkitEntity implements Entity {
     public boolean remove() {
         // synchronize the whole method, not just the remove operation as we always need to synchronize and
         // can make sure the entity reference was not invalidated in the few milliseconds between the next available tick (lol)
-        return TaskManager.taskManager().sync(() -> {
-            org.bukkit.entity.Entity entity = entityRef.get();
-            if (entity != null) {
-                try {
-                    entity.remove();
-                } catch (UnsupportedOperationException e) {
-                    return false;
-                }
-                return entity.isDead();
-            } else {
-                return true;
+        org.bukkit.entity.Entity currentEntity = entityRef.get();
+        if (FoliaSupport.isFolia() && currentEntity != null) {
+            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), currentEntity, this::removeCurrent);
+        }
+        return TaskManager.taskManager().sync(this::removeCurrent);
+    }
+
+    private boolean removeCurrent() {
+        org.bukkit.entity.Entity entity = entityRef.get();
+        if (entity != null) {
+            try {
+                entity.remove();
+            } catch (UnsupportedOperationException e) {
+                return false;
             }
-        });
+            return entity.isDead();
+        } else {
+            return true;
+        }
     }
 
     @SuppressWarnings("unchecked")
