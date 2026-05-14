@@ -366,7 +366,12 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
         if (lockHolder.chunkLock == null) {
             return;
         }
-        MinecraftServer.getServer().execute(() -> {
+
+        final java.util.BitSet nullSkyLightBitSet = null;
+        final java.util.BitSet nullBlockLightBitSet = null;
+        final boolean disableXRay = false;
+
+        Runnable sendPacketTask = () -> {
             try {
                 ChunkPos pos = levelChunk.getPos();
                 ClientboundLevelChunkWithLightPacket packet;
@@ -374,24 +379,30 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
                     packet = new ClientboundLevelChunkWithLightPacket(
                             levelChunk,
                             nmsWorld.getLightEngine(),
-                            null,
-                            null,
-                            false // last false is to not bother with x-ray
+                            nullSkyLightBitSet,
+                            nullBlockLightBitSet,
+                            disableXRay
                     );
                 } else {
                     // deprecated on paper - deprecation suppressed
                     packet = new ClientboundLevelChunkWithLightPacket(
                             levelChunk,
                             nmsWorld.getLightEngine(),
-                            null,
-                            null
+                            nullSkyLightBitSet,
+                            nullBlockLightBitSet
                     );
                 }
                 nearbyPlayers(nmsWorld, pos).forEach(p -> p.connection.send(packet));
             } finally {
                 NMSAdapter.endChunkPacketSend(nmsWorld.getWorld().getName(), pair, lockHolder);
             }
-        });
+        };
+
+        try {
+            MinecraftServer.getServer().execute(sendPacketTask);
+        } catch (UnsupportedOperationException exception) {
+            sendPacketTask.run();
+        }
     }
 
     private static List<ServerPlayer> nearbyPlayers(ServerLevel serverLevel, ChunkPos coordIntPair) {
