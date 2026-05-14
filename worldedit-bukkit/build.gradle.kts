@@ -78,8 +78,6 @@ val adaptersReobf = configurations.create("adaptersReobf") {
     }
 }
 
-val mojmapOnlyAdapters = setOf("adapter-26_1_2")
-
 allprojects {
     configurations.configureEach {
         resolutionStrategy {
@@ -118,7 +116,7 @@ dependencies {
 
     project.project(":worldedit-bukkit:adapters").subprojects.forEach {
         "adapters"(project(it.path))
-        if (it.name !in mojmapOnlyAdapters) {
+        if (it.name.startsWith("adapter-1_")) {
             "adaptersReobf"(project(it.path))
         }
     }
