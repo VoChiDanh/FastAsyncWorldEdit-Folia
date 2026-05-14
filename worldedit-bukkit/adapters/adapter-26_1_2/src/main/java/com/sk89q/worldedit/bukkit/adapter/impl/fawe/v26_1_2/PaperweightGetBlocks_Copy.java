@@ -8,14 +8,21 @@ import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.IChunkSet;
 import com.fastasyncworldedit.core.queue.IQueueExtent;
 import com.fastasyncworldedit.core.util.NbtUtils;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
+import com.sk89q.worldedit.entity.BaseEntity;
+import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.util.Location;
+import com.sk89q.worldedit.util.concurrency.LazyReference;
+import com.sk89q.worldedit.world.NullWorld;
 import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypesCache;
+import com.sk89q.worldedit.world.entity.EntityTypes;
 import io.papermc.lib.PaperLib;
 import net.minecraft.core.Holder;
 import net.minecraft.nbt.Tag;
@@ -27,6 +34,12 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import org.apache.logging.log4j.Logger;
+import org.enginehub.linbus.tree.LinCompoundTag;
+import org.enginehub.linbus.tree.LinDoubleTag;
+import org.enginehub.linbus.tree.LinFloatTag;
+import org.enginehub.linbus.tree.LinListTag;
+import org.enginehub.linbus.tree.LinStringTag;
+import org.enginehub.linbus.tree.LinTagType;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
@@ -81,7 +94,9 @@ public class PaperweightGetBlocks_Copy implements IChunkGet {
     protected void storeEntity(Entity entity) {
         LinValueOutput output = createOutput();
         entity.save(output);
-        entities.add(FaweCompoundTag.of(output::buildResult));
+        entities.add(FaweCompoundTag.of(() -> output.toBuilder()
+                .putString("Id", net.minecraft.world.entity.EntityType.getKey(entity.getType()).toString())
+                .build()));
     }
 
     @Override
@@ -91,7 +106,82 @@ public class PaperweightGetBlocks_Copy implements IChunkGet {
 
     @Override
     public Set<com.sk89q.worldedit.entity.Entity> getFullEntities() {
-        throw new UnsupportedOperationException("Cannot get full entities from GET copy.");
+        if (entities.isEmpty()) {
+            return Set.of();
+        }
+        Set<com.sk89q.worldedit.entity.Entity> fullEntities = new HashSet<>();
+        for (FaweCompoundTag tag : entities) {
+            com.sk89q.worldedit.entity.Entity entity = toFullEntity(tag);
+            if (entity != null) {
+                fullEntities.add(entity);
+            }
+        }
+        return fullEntities;
+    }
+
+    private @Nullable com.sk89q.worldedit.entity.Entity toFullEntity(FaweCompoundTag tag) {
+        LinCompoundTag linTag = tag.linTag();
+        LinStringTag idTag = linTag.findTag("Id", LinTagType.stringTag());
+        if (idTag == null) {
+            idTag = linTag.findTag("id", LinTagType.stringTag());
+        }
+        if (idTag == null || idTag.value().isEmpty()) {
+            return null;
+        }
+        LinListTag<LinDoubleTag> posTag = linTag.findListTag("Pos", LinTagType.doubleTag());
+        LinListTag<LinFloatTag> rotTag = linTag.findListTag("Rotation", LinTagType.floatTag());
+        double x = posTag != null && posTag.value().size() >= 3 ? posTag.get(0).valueAsDouble() : chunkX << 4;
+        double y = posTag != null && posTag.value().size() >= 3 ? posTag.get(1).valueAsDouble() : minHeight;
+        double z = posTag != null && posTag.value().size() >= 3 ? posTag.get(2).valueAsDouble() : chunkZ << 4;
+        float yaw = rotTag != null && rotTag.value().size() >= 2 ? rotTag.get(0).valueAsFloat() : 0.0f;
+        float pitch = rotTag != null && rotTag.value().size() >= 2 ? rotTag.get(1).valueAsFloat() : 0.0f;
+        LinCompoundTag normalizedTag = linTag.toBuilder().putString("Id", idTag.value()).build();
+        BaseEntity state = new BaseEntity(EntityTypes.parse(idTag.value()), LazyReference.computed(normalizedTag));
+        Extent extent;
+        try {
+            extent = BukkitAdapter.adapt(serverLevel.getWorld());
+        } catch (Exception ignored) {
+            extent = NullWorld.getInstance();
+        }
+        return new CopiedEntity(extent, new Location(extent, x, y, z, yaw, pitch), state);
+    }
+
+    private record CopiedEntity(
+            Extent extent,
+            Location location,
+            BaseEntity state
+    ) implements com.sk89q.worldedit.entity.Entity {
+
+        @Override
+        public BaseEntity getState() {
+            return state;
+        }
+
+        @Override
+        public boolean remove() {
+            return false;
+        }
+
+        @Override
+        public <T> T getFacet(Class<? extends T> cls) {
+            return null;
+        }
+
+        @Override
+        public Location getLocation() {
+            return location;
+        }
+
+        @Override
+        public boolean setLocation(Location location) {
+            return false;
+        }
+
+        @Override
+        public Extent getExtent() {
+            return extent;
+        }
+
     }
 
     @Override

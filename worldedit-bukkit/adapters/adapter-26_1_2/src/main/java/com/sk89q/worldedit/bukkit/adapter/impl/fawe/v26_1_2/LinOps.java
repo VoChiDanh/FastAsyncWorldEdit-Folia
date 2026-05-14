@@ -269,7 +269,7 @@ public class LinOps implements DynamicOps<LinTag<?>> {
                     if (key instanceof LinStringTag tag) {
                         return value.get(tag.value());
                     }
-                    throw new UnsupportedOperationException("Cannot get map entry with non-string key: " + key);
+                    throw new IllegalArgumentException("Cannot get map entry with non-string key: " + key);
                 }
 
                 @Override
@@ -302,7 +302,7 @@ public class LinOps implements DynamicOps<LinTag<?>> {
                 builder.put(key.value(), pair.getSecond());
                 return;
             }
-            throw new UnsupportedOperationException("Cannot create map entry with non-string key: " + pair.getFirst());
+            throw new IllegalArgumentException("Cannot create map entry with non-string key: " + pair.getFirst());
         });
         return builder.build();
     }

@@ -37,7 +37,7 @@ public class PaperweightPlacementStateProcessor extends PlacementStateProcessor 
         super(extent, mask, region);
         World world = ExtentTraverser.getWorldFromExtent(extent);
         if (world == null) {
-            throw new UnsupportedOperationException(
+            throw new IllegalStateException(
                     "World is required for PlacementStateProcessor but none found in given extent.");
         }
         BukkitWorld bukkitWorld;

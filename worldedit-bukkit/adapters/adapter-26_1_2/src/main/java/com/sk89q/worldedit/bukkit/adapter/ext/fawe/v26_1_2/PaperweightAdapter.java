@@ -40,6 +40,7 @@ import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_1_2.LinValueOutput;
 import com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_1_2.PaperweightFaweAdapter;
+import com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_1_2.regen.PaperweightRegen;
 import com.sk89q.worldedit.entity.BaseEntity;
 import com.sk89q.worldedit.extension.platform.Watchdog;
 import com.sk89q.worldedit.extent.Extent;
@@ -690,26 +691,10 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
 
     @Override
     public boolean regenerate(World bukkitWorld, Region region, Extent extent, RegenOptions options) {
-        throw new UnsupportedOperationException("World regeneration is not supported by the Folia 26.1.2 adapter yet");
-    }
-
-    private void doRegen(World bukkitWorld, Region region, Extent extent, RegenOptions options) throws Exception {
-        Environment env = bukkitWorld.getEnvironment();
-        ChunkGenerator gen = bukkitWorld.getGenerator();
-
-        Path tempDir = Files.createTempDirectory("WorldEditWorldGen");
-        LevelStorageSource levelStorage = LevelStorageSource.createDefault(tempDir);
-        ResourceKey<LevelStem> worldDimKey = getWorldDimKey(env);
         try {
-            throw new UnsupportedOperationException("World regeneration is not supported by the Folia 26.1.2 adapter yet");
-        } finally {
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, World> map = (Map<String, World>) serverWorldsField.get(Bukkit.getServer());
-                map.remove("worldeditregentempworld");
-            } catch (IllegalAccessException ignored) {
-            }
-            SafeFiles.tryHardToDeleteDir(tempDir);
+            return new PaperweightRegen(bukkitWorld, region, extent, options).regenerate();
+        } catch (Exception e) {
+            throw new IllegalStateException("Regen failed.", e);
         }
     }
 

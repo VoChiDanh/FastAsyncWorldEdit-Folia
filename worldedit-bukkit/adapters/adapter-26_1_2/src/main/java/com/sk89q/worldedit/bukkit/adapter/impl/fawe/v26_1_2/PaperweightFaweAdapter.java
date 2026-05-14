@@ -2,11 +2,13 @@ package com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_1_2;
 
 import com.fastasyncworldedit.bukkit.adapter.FaweAdapter;
 import com.fastasyncworldedit.bukkit.adapter.NMSRelighterFactory;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.FaweCache;
 import com.fastasyncworldedit.core.entity.LazyBaseEntity;
 import com.fastasyncworldedit.core.extent.processor.PlacementStateProcessor;
 import com.fastasyncworldedit.core.extent.processor.lighting.RelighterFactory;
 import com.fastasyncworldedit.core.nbt.FaweCompoundTag;
+import com.fastasyncworldedit.core.queue.IBlocks;
 import com.fastasyncworldedit.core.queue.IBatchProcessor;
 import com.fastasyncworldedit.core.queue.IChunkGet;
 import com.fastasyncworldedit.core.queue.implementation.packet.ChunkPacket;
@@ -21,6 +23,7 @@ import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.MaxChangedBlocksException;
 import com.sk89q.worldedit.blocks.BaseItemStack;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.bukkit.adapter.ext.fawe.v26_1_2.PaperweightAdapter;
 import com.sk89q.worldedit.bukkit.adapter.impl.fawe.v26_1_2.regen.PaperweightRegen;
@@ -47,6 +50,7 @@ import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import com.sk89q.worldedit.world.block.BlockType;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import com.sk89q.worldedit.world.block.BlockTypesCache;
 import com.sk89q.worldedit.world.entity.EntityType;
 import com.sk89q.worldedit.world.generation.ConfiguredFeatureType;
@@ -151,8 +155,6 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
         } catch (NoSuchMethodException ignored) { // may not be present in newer paper versions
         }
     }
-
-    private final PaperweightMapChunkUtil mapUtil = new PaperweightMapChunkUtil();
 
     public PaperweightFaweAdapter() throws NoSuchFieldException, NoSuchMethodException {
         super(new PaperweightAdapter());
@@ -480,31 +482,38 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
 
     @Override
     public void sendFakeChunk(World world, Player player, ChunkPacket chunkPacket) {
-        ServerLevel nmsWorld = getServerLevel(world);
-        ChunkHolder map = PaperweightPlatformAdapter.getPlayerChunk(nmsWorld, chunkPacket.getChunkX(), chunkPacket.getChunkZ());
-        if (map != null && wasAccessibleSinceLastSave(map)) {
-            boolean flag = false;
-            // PlayerChunk.d players = map.players;
-            Stream<ServerPlayer> stream = /*players.a(new ChunkCoordIntPair(packet.getChunkX(), packet.getChunkZ()), flag)
-             */ Stream.empty();
+        Collection<? extends Player> recipients = player == null ? world.getPlayers() : List.of(player);
+        for (Player recipient : recipients) {
+            FoliaSupport.callAtEntity(
+                    WorldEditPlugin.getInstance(), recipient, () -> {
+                sendFakeChunkAsBlockChanges(world, recipient, chunkPacket);
+                return null;
+            });
+        }
+    }
 
-            ServerPlayer checkPlayer = player == null ? null : ((CraftPlayer) player).getHandle();
-            stream.filter(entityPlayer -> checkPlayer == null || entityPlayer == checkPlayer)
-                    .forEach(entityPlayer -> {
-                        synchronized (chunkPacket) {
-                            ClientboundLevelChunkWithLightPacket nmsPacket = (ClientboundLevelChunkWithLightPacket) chunkPacket.getNativePacket();
-                            if (nmsPacket == null) {
-                                nmsPacket = mapUtil.create(this, chunkPacket);
-                                chunkPacket.setNativePacket(nmsPacket);
-                            }
-                            try {
-                                FaweCache.INSTANCE.CHUNK_FLAG.get().set(true);
-                                entityPlayer.connection.send(nmsPacket);
-                            } finally {
-                                FaweCache.INSTANCE.CHUNK_FLAG.get().set(false);
-                            }
-                        }
-                    });
+    private void sendFakeChunkAsBlockChanges(World world, Player player, ChunkPacket chunkPacket) {
+        IBlocks chunk = chunkPacket.getChunk();
+        BlockState air = BlockTypes.AIR.getDefaultState();
+        for (int layer = chunk.getMinSectionPosition(); layer <= chunk.getMaxSectionPosition(); layer++) {
+            boolean hasSection = chunk.hasSection(layer);
+            if (!hasSection && !chunkPacket.isFull()) {
+                continue;
+            }
+            char[] section = hasSection ? chunk.load(layer) : null;
+            for (int index = 0; index < 4096; index++) {
+                int y = (layer << 4) + (index >> 8);
+                if (y < world.getMinHeight() || y >= world.getMaxHeight()) {
+                    continue;
+                }
+                int x = (chunkPacket.getChunkX() << 4) + (index & 15);
+                int z = (chunkPacket.getChunkZ() << 4) + ((index >> 4) & 15);
+                BlockState state = section == null ? air : BlockState.getFromOrdinal(section[index]);
+                if (state == null) {
+                    state = air;
+                }
+                player.sendBlockChange(new Location(world, x, y, z), BukkitAdapter.adapt(state));
+            }
         }
     }
 
@@ -594,7 +603,7 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
 
     @Override
     public boolean generateStructure(StructureType type, World world, EditSession editSession, BlockVector3 pt) {
-        return false;
+        return parent.generateStructure(type, world, editSession, pt);
     }
 
     @Override
@@ -749,7 +758,7 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
 
     @Override
     public boolean regenerate(World bukkitWorld, Region region, Extent target, RegenOptions options) throws Exception {
-        throw new UnsupportedOperationException("World regeneration is not supported by the Folia 26.1.2 adapter yet");
+        return new PaperweightRegen(bukkitWorld, region, target, options).regenerate();
     }
 
     @Override

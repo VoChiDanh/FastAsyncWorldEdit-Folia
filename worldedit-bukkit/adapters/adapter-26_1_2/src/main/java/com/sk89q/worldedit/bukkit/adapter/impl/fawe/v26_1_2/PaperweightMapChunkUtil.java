@@ -27,8 +27,7 @@ public class PaperweightMapChunkUtil extends MapChunkUtil<ClientboundLevelChunkW
 
     @Override
     public ClientboundLevelChunkWithLightPacket createPacket() {
-        // TODO ??? return new ClientboundLevelChunkPacket();
-        throw new UnsupportedOperationException();
+        return null;
     }
 
 }

@@ -14,6 +14,8 @@ import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.util.io.file.SafeFiles;
 import com.sk89q.worldedit.world.RegenOptions;
+import io.papermc.paper.world.PaperWorldLoader;
+import io.papermc.paper.world.saveddata.PaperLevelOverrides;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -26,8 +28,11 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.WorldGenSettings;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.PrimaryLevelData;
+import net.minecraft.world.level.storage.SavedDataStorage;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftServer;
@@ -39,6 +44,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -107,7 +113,113 @@ public class PaperweightRegen extends Regenerator {
 
     @Override
     protected boolean initNewWorld() throws Exception {
-        throw new UnsupportedOperationException("World regeneration is not supported by the Folia 26.1.2 adapter yet");
+        tempDir = java.nio.file.Files.createTempDirectory("FastAsyncWorldEditWorldGen");
+
+        World.Environment environment = originalBukkitWorld.getEnvironment();
+        org.bukkit.generator.ChunkGenerator generator = originalBukkitWorld.getGenerator();
+        LevelStorageSource levelStorageSource = LevelStorageSource.createDefault(tempDir);
+        ResourceKey<LevelStem> levelStemResourceKey = getWorldDimKey(environment);
+        session = levelStorageSource.createAccess("faweregentempworld");
+
+        MinecraftServer server = originalServerWorld.getCraftServer().getServer();
+        PrimaryLevelData originalWorldData = (PrimaryLevelData) server.getWorldData().overworldData();
+        WorldGenSettings originalWorldGenSettings = server.getWorldGenSettings();
+        WorldOptions originalOpts = originalWorldGenSettings.options();
+        WorldOptions newOpts = options.getSeed().isPresent()
+                ? originalOpts.withSeed(OptionalLong.of(seed))
+                : originalOpts;
+        WorldGenSettings newWorldGenSettings = new WorldGenSettings(newOpts, originalWorldGenSettings.dimensions());
+        LevelSettings newWorldSettings = originalWorldData.getLevelSettings()
+                .withLevelName("faweregentempworld")
+                .withGameType(originalServerWorld.serverLevelData.getGameType())
+                .withDifficulty(originalServerWorld.serverLevelData.getDifficulty())
+                .withHardcore(originalServerWorld.serverLevelData.isHardcore());
+
+        PrimaryLevelData.SpecialWorldProperty specialWorldProperty =
+                originalWorldData.isFlatWorld()
+                        ? PrimaryLevelData.SpecialWorldProperty.FLAT
+                        : originalWorldData.isDebugWorld()
+                                ? PrimaryLevelData.SpecialWorldProperty.DEBUG
+                                : PrimaryLevelData.SpecialWorldProperty.NONE;
+        PrimaryLevelData newWorldData = new PrimaryLevelData(newWorldSettings, specialWorldProperty, Lifecycle.stable());
+        SavedDataStorage dataStorage = new SavedDataStorage(
+                session.getLevelPath(LevelResource.DATA),
+                server.getFixerUpper(),
+                server.registryAccess()
+        );
+        PaperLevelOverrides levelOverrides = PaperLevelOverrides
+                .createFromLiveLevelData(newWorldData)
+                .attach(newWorldData, originalServerWorld.dimension());
+        PaperWorldLoader.LoadedWorldData loadedWorldData = new PaperWorldLoader.LoadedWorldData(
+                "faweregentempworld",
+                UUID.randomUUID(),
+                null,
+                levelOverrides
+        );
+
+        BiomeProvider biomeProvider = getBiomeProvider();
+
+        freshWorld = Fawe.instance().getQueueHandler().sync((Supplier<ServerLevel>) () -> new ServerLevel(
+                server,
+                server.executor,
+                session,
+                newWorldGenSettings,
+                originalServerWorld.dimension(),
+                new LevelStem(
+                        originalServerWorld.dimensionTypeRegistration(),
+                        originalServerWorld.getChunkSource().getGenerator()
+                ),
+                originalServerWorld.isDebug(),
+                seed,
+                ImmutableList.of(),
+                false,
+                levelStemResourceKey,
+                environment,
+                generator,
+                biomeProvider,
+                dataStorage,
+                loadedWorldData
+        ) {
+
+            private final Holder<Biome> singleBiome = options.hasBiomeType() ? DedicatedServer.getServer().registryAccess()
+                    .lookupOrThrow(BIOME).asHolderIdMap().byIdOrThrow(
+                            WorldEditPlugin.getInstance().getBukkitImplAdapter().getInternalBiomeId(options.getBiomeType())
+                    ) : null;
+
+            @Override
+            public @Nonnull Holder<Biome> getUncachedNoiseBiome(int biomeX, int biomeY, int biomeZ) {
+                if (options.hasBiomeType()) {
+                    return singleBiome;
+                }
+                return super.getUncachedNoiseBiome(biomeX, biomeY, biomeZ);
+            }
+
+            @Override
+            public void save(
+                    final ProgressListener progressListener,
+                    final boolean flush,
+                    final boolean savingDisabled
+            ) {
+                // The temporary regeneration world must never be persisted.
+            }
+
+            @Override
+            public void save(
+                    final ProgressListener progressListener,
+                    final boolean flush,
+                    final boolean savingDisabled,
+                    final boolean close
+            ) {
+                // The temporary regeneration world must never be persisted.
+            }
+        }).get();
+        freshWorld.noSave = true;
+        removeWorldFromWorldsMap();
+        newWorldData.checkName(originalServerWorld.serverLevelData.getLevelName());
+        if (paperConfigField != null) {
+            paperConfigField.set(freshWorld, originalServerWorld.paperConfig());
+        }
+        return true;
     }
 
     @Override

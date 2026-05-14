@@ -107,7 +107,7 @@ public class PaperweightPostProcessor implements IBatchProcessor {
     @Nullable
     @Override
     public Extent construct(final Extent child) {
-        throw new UnsupportedOperationException("Processing only");
+        return null;
     }
 
     @Override
