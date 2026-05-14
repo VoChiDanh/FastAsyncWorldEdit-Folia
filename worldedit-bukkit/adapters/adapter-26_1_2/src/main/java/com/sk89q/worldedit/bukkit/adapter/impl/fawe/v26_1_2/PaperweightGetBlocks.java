@@ -334,6 +334,14 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
             LevelChunk nmsChunk,
             ServerLevel nmsWorld
     ) throws Exception {
+        final String nbtKeyId = "Id";
+        final String nbtKeyPos = "Pos";
+        final String nbtKeyRotation = "Rotation";
+        final String nbtKeyX = "x";
+        final String nbtKeyY = "y";
+        final String nbtKeyZ = "z";
+        final int maxSectionArraySize = 4096;
+
         PaperweightGetBlocks_Copy copy = createCopy ? new PaperweightGetBlocks_Copy(nmsChunk) : null;
         if (createCopy) {
             if (copies.containsKey(copyKey)) {
@@ -406,7 +414,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                                 );
                                 LevelChunkSection newSection = PaperweightPlatformAdapter.newChunkSection(
                                         layerNo,
-                                        new char[4096],
+                                        new char[maxSectionArraySize],
                                         adapter,
                                         serverLevel.registryAccess(),
                                         serverLevel.palettedContainerFactory().blockStatesStrategy(),
@@ -420,7 +428,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                                         newSection,
                                         getSectionIndex
                                 )) {
-                                    updateGet(nmsChunk, levelChunkSections, newSection, new char[4096], getSectionIndex);
+                                    updateGet(nmsChunk, levelChunkSections, newSection, new char[maxSectionArraySize], getSectionIndex);
                                     continue;
                                 } else {
                                     existingSection = levelChunkSections[getSectionIndex];
@@ -467,8 +475,8 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
 
                     if (createCopy) {
                         char[] tmpLoad = load(layerNo);
-                        char[] copyArr = new char[4096];
-                        System.arraycopy(tmpLoad, 0, copyArr, 0, 4096);
+                        char[] copyArr = new char[maxSectionArraySize];
+                        System.arraycopy(tmpLoad, 0, copyArr, 0, maxSectionArraySize);
                         copy.storeSection(getSectionIndex, copyArr);
                         if (biomes != null && existingSection != null) {
                             copy.storeBiomes(getSectionIndex, existingSection.getBiomes());
@@ -527,7 +535,7 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                                 this.sections[getSectionIndex] = existingSection;
                                 this.reset();
                             } else if (!Arrays.equals(
-                                    update(getSectionIndex, new char[4096], true),
+                                    update(getSectionIndex, new char[maxSectionArraySize], true),
                                     load(layerNo)
                             )) {
                                 this.reset(layerNo);
@@ -644,9 +652,9 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                     while (iterator.hasNext()) {
                         final FaweCompoundTag nativeTag = iterator.next();
                         final LinCompoundTag linTag = nativeTag.linTag();
-                        final LinStringTag idTag = linTag.findTag("Id", LinTagType.stringTag());
-                        final LinListTag<LinDoubleTag> posTag = linTag.findListTag("Pos", LinTagType.doubleTag());
-                        final LinListTag<LinFloatTag> rotTag = linTag.findListTag("Rotation", LinTagType.floatTag());
+                        final LinStringTag idTag = linTag.findTag(nbtKeyId, LinTagType.stringTag());
+                        final LinListTag<LinDoubleTag> posTag = linTag.findListTag(nbtKeyPos, LinTagType.doubleTag());
+                        final LinListTag<LinFloatTag> rotTag = linTag.findListTag(nbtKeyRotation, LinTagType.floatTag());
                         if (idTag == null || posTag == null || rotTag == null) {
                             LOGGER.error("Unknown entity tag: {}", nativeTag);
                             continue;
@@ -721,14 +729,14 @@ public class PaperweightGetBlocks extends AbstractBukkitGetBlocks<ServerLevel, L
                         final BlockPos pos = new BlockPos(x, y, z);
 
                         synchronized (nmsWorld) {
-                            BlockEntity tileEntity = nmsWorld.getBlockEntity(pos);
+                            BlockEntity tileEntity = nmsChunk.getBlockEntity(pos, LevelChunk.EntityCreationType.IMMEDIATE);
                             if (tileEntity == null || tileEntity.isRemoved()) {
-                                nmsWorld.removeBlockEntity(pos);
-                                tileEntity = nmsWorld.getBlockEntity(pos);
+                                nmsChunk.removeBlockEntity(pos);
+                                tileEntity = nmsChunk.getBlockEntity(pos, LevelChunk.EntityCreationType.IMMEDIATE);
                             }
                             if (tileEntity != null) {
                                 ValueInput input = createInput(nativeTag.linTag().toBuilder()
-                                        .putInt("x", x).putInt("y", y).putInt("z", z)
+                                        .putInt(nbtKeyX, x).putInt(nbtKeyY, y).putInt(nbtKeyZ, z)
                                         .build()
                                 );
                                 tileEntity.loadWithComponents(input);

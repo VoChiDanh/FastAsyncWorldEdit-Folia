@@ -94,10 +94,19 @@ public class PaperweightServerLevelDelegateProxy implements InvocationHandler, A
 
     @Nullable
     private BlockEntity getBlockEntity(BlockPos blockPos) {
-        // This doesn't synthesize or load from world. I think editing existing block entities without setting the block
-        // (in the context of features) should not be supported in the first place.
         BlockVector3 pos = adapt(blockPos);
-        return createdBlockEntities.get(pos);
+        BlockEntity created = createdBlockEntities.get(pos);
+        if (created != null) {
+            return created;
+        }
+
+        int chunkX = blockPos.getX() >> 4;
+        int chunkZ = blockPos.getZ() >> 4;
+        net.minecraft.world.level.chunk.LevelChunk chunk = this.serverLevel.getChunkSource().getChunk(chunkX, chunkZ, false);
+        if (chunk != null) {
+            return chunk.getBlockEntity(blockPos, net.minecraft.world.level.chunk.LevelChunk.EntityCreationType.IMMEDIATE);
+        }
+        return null;
     }
 
     private BlockState getBlockState(BlockPos blockPos) {
@@ -153,7 +162,11 @@ public class PaperweightServerLevelDelegateProxy implements InvocationHandler, A
         entity.saveWithoutId(output);
         BaseEntity baseEntity = new BaseEntity(EntityTypes.get(id.toString()), LazyReference.from(output::buildResult));
 
-        return editSession.createEntity(location, baseEntity) != null;
+        try {
+            return editSession.createEntity(location, baseEntity) != null;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
