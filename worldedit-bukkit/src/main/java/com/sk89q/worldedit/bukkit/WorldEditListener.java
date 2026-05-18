@@ -42,6 +42,7 @@ import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.enginehub.piston.CommandManager;
@@ -106,6 +107,11 @@ public class WorldEditListener implements Listener {
         if (Settings.settings().ENABLED_COMPONENTS.NOTIFY_UPDATE_INGAME) {
             UpdateNotification.doUpdateNotification(player);
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerMove(PlayerMoveEvent event) {
+        plugin.wrapPlayer(event.getPlayer()).updateLastKnownLocation(event.getTo());
     }
     //FAWE end
 

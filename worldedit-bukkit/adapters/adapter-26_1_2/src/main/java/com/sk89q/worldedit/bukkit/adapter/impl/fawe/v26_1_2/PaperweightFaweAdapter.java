@@ -484,11 +484,17 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
     public void sendFakeChunk(World world, Player player, ChunkPacket chunkPacket) {
         Collection<? extends Player> recipients = player == null ? world.getPlayers() : List.of(player);
         for (Player recipient : recipients) {
-            FoliaSupport.callAtEntity(
-                    WorldEditPlugin.getInstance(), recipient, () -> {
-                sendFakeChunkAsBlockChanges(world, recipient, chunkPacket);
-                return null;
-            });
+            try {
+                FoliaSupport.callAtEntity(
+                        WorldEditPlugin.getInstance(), recipient, () -> {
+                    sendFakeChunkAsBlockChanges(world, recipient, chunkPacket);
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                    throw e;
+                }
+            }
         }
     }
 

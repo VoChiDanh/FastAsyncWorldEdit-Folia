@@ -65,27 +65,48 @@ public class BukkitEntity implements Entity {
     public Extent getExtent() {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getWorld()));
+            try {
+                return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getWorld()));
+            } catch (RuntimeException e) {
+                if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                    throw e;
+                }
+            }
         } else {
             return NullWorld.getInstance();
         }
+        return NullWorld.getInstance();
     }
 
     @Override
     public Location getLocation() {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getLocation()));
+            try {
+                return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), entity, () -> BukkitAdapter.adapt(entity.getLocation()));
+            } catch (RuntimeException e) {
+                if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                    throw e;
+                }
+            }
         } else {
             return new Location(NullWorld.getInstance());
         }
+        return new Location(NullWorld.getInstance());
     }
 
     @Override
     public boolean setLocation(Location location) {
         org.bukkit.entity.Entity entity = entityRef.get();
         if (entity != null) {
-            return FoliaSupport.teleport(WorldEditPlugin.getInstance(), entity, BukkitAdapter.adapt(location));
+            try {
+                return FoliaSupport.teleport(WorldEditPlugin.getInstance(), entity, BukkitAdapter.adapt(location));
+            } catch (RuntimeException e) {
+                if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                    throw e;
+                }
+                return false;
+            }
         } else {
             return false;
         }
@@ -116,7 +137,14 @@ public class BukkitEntity implements Entity {
         // can make sure the entity reference was not invalidated in the few milliseconds between the next available tick (lol)
         org.bukkit.entity.Entity currentEntity = entityRef.get();
         if (FoliaSupport.isFolia() && currentEntity != null) {
-            return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), currentEntity, this::removeCurrent);
+            try {
+                return FoliaSupport.callAtEntity(WorldEditPlugin.getInstance(), currentEntity, this::removeCurrent);
+            } catch (RuntimeException e) {
+                if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                    throw e;
+                }
+                return false;
+            }
         }
         return TaskManager.taskManager().sync(this::removeCurrent);
     }

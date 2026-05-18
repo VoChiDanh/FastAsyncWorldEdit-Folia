@@ -83,6 +83,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
     private final WorldEditPlugin plugin;
     //FAWE start
     private PermissionAttachment permAttachment = null;
+    private volatile Location lastKnownLocation;
 
     /**
      * This constructs a new {@link BukkitPlayer} for the given {@link Player}.
@@ -95,6 +96,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
         super(player != null ? getExistingMap(WorldEditPlugin.getInstance(), player) : new ConcurrentHashMap<>());
         this.plugin = WorldEditPlugin.getInstance();
         this.player = player;
+        updateLastKnownLocation();
     }
     //FAWE end
 
@@ -109,6 +111,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
     public BukkitPlayer(@Nonnull WorldEditPlugin plugin, @Nullable Player player) {
         this.plugin = plugin;
         this.player = player;
+        updateLastKnownLocation();
         //FAWE start
         if (player != null && Settings.settings().CLIPBOARD.USE_DISK) {
             BukkitPlayer cached = WorldEditPlugin.getInstance().getCachedPlayer(player);
@@ -262,14 +265,21 @@ public class BukkitPlayer extends AbstractPlayerActor {
         }
         org.bukkit.World finalWorld = world;
         //FAWE end
-        return FoliaSupport.teleport(plugin, player, new Location(
-                finalWorld,
-                pos.x(),
-                pos.y(),
-                pos.z(),
-                yaw,
-                pitch
-        ));
+        try {
+            return FoliaSupport.teleport(plugin, player, new Location(
+                    finalWorld,
+                    pos.x(),
+                    pos.y(),
+                    pos.z(),
+                    yaw,
+                    pitch
+            ));
+        } catch (RuntimeException e) {
+            if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                throw e;
+            }
+            return false;
+        }
     }
 
     @Override
@@ -301,7 +311,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
             return syncEntity(() -> (!plugin.getLocalConfiguration().noOpPermissions && player.isOp())
                     || plugin.getPermissionsResolver().hasPermission(player.getWorld().getName(), player, perm));
         } catch (RuntimeException e) {
-            if (wasInterrupted(e)) {
+            if (wasInterrupted(e) || FoliaSupport.isEntitySchedulerRetired(e)) {
                 return false;
             }
             throw e;
@@ -367,6 +377,18 @@ public class BukkitPlayer extends AbstractPlayerActor {
         return player;
     }
 
+    void updateLastKnownLocation() {
+        if (player != null && (!FoliaSupport.isFolia() || FoliaSupport.isOwnedByCurrentRegion(player))) {
+            updateLastKnownLocation(player.getLocation());
+        }
+    }
+
+    void updateLastKnownLocation(Location location) {
+        if (location != null) {
+            this.lastKnownLocation = location.clone();
+        }
+    }
+
     @Override
     public boolean isAllowedToFly() {
         return syncEntity(player::getAllowFlight);
@@ -387,7 +409,17 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public com.sk89q.worldedit.util.Location getLocation() {
-        Location nativeLocation = syncEntity(player::getLocation);
+        Location nativeLocation;
+        if (FoliaSupport.isFolia() && FoliaSupport.isGlobalTickThread() && !FoliaSupport.isOwnedByCurrentRegion(player)) {
+            nativeLocation = lastKnownLocation;
+            if (nativeLocation == null) {
+                return new com.sk89q.worldedit.util.Location(com.sk89q.worldedit.world.NullWorld.getInstance());
+            }
+            nativeLocation = nativeLocation.clone();
+        } else {
+            nativeLocation = syncEntity(player::getLocation);
+            updateLastKnownLocation(nativeLocation);
+        }
         Vector3 position = BukkitAdapter.asVector(nativeLocation);
         return new com.sk89q.worldedit.util.Location(
                 BukkitAdapter.adapt(nativeLocation.getWorld()),
@@ -399,7 +431,14 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public boolean setLocation(com.sk89q.worldedit.util.Location location) {
-        return FoliaSupport.teleport(plugin, player, BukkitAdapter.adapt(location));
+        try {
+            return FoliaSupport.teleport(plugin, player, BukkitAdapter.adapt(location));
+        } catch (RuntimeException e) {
+            if (!FoliaSupport.isEntitySchedulerRetired(e)) {
+                throw e;
+            }
+            return false;
+        }
     }
 
     @Override

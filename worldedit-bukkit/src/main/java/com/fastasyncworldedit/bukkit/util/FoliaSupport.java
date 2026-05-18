@@ -20,6 +20,8 @@ import java.util.function.Supplier;
 
 public final class FoliaSupport {
 
+    private static final String ENTITY_SCHEDULER_RETIRED = "Entity scheduler retired";
+
     private static final boolean FOLIA;
     private static final Method GET_GLOBAL_REGION_SCHEDULER;
     private static final Method GET_REGION_SCHEDULER;
@@ -259,12 +261,23 @@ public final class FoliaSupport {
                 new Class<?>[]{Plugin.class, Consumer.class, Runnable.class},
                 plugin,
                 wrap(() -> complete(future, supplier)),
-                (Runnable) () -> future.completeExceptionally(new IllegalStateException("Entity scheduler retired"))
+                (Runnable) () -> future.completeExceptionally(new IllegalStateException(ENTITY_SCHEDULER_RETIRED))
         );
         if (scheduled == null) {
-            throw new IllegalStateException("Entity scheduler retired");
+            throw new IllegalStateException(ENTITY_SCHEDULER_RETIRED);
         }
         return join(future);
+    }
+
+    public static boolean isEntitySchedulerRetired(Throwable throwable) {
+        while (throwable != null) {
+            if (throwable instanceof IllegalStateException
+                    && ENTITY_SCHEDULER_RETIRED.equals(throwable.getMessage())) {
+                return true;
+            }
+            throwable = throwable.getCause();
+        }
+        return false;
     }
 
     public static boolean teleport(@Nonnull Plugin plugin, @Nonnull Entity entity, @Nonnull Location location) {
