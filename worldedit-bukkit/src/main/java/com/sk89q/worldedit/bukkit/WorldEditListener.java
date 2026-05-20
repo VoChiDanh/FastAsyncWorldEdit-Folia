@@ -125,12 +125,12 @@ public class WorldEditListener implements Listener {
                 .getPlatformManager()
                 .getPlatformCommandManager()
                 .getCommandManager();
-        event.getCommands().removeIf(name ->
-                // remove if in the manager and not satisfied
-                commandManager.getCommand(name)
-                        .filter(command -> !command.getCondition().satisfied(store))
-                        .isPresent()
-        );
+        commandManager.getAllCommands().forEach(command -> {
+            if (!command.getCondition().satisfied(store)) {
+                event.getCommands().remove(command.getName());
+                command.getAliases().forEach(event.getCommands()::remove);
+            }
+        });
     }
 
     /**
