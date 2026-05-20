@@ -51,6 +51,15 @@ public abstract class TaskManager {
      *
      * @param runnable the task to run
      * @param interval in ticks
+     * @param delay    initial delay in ticks
+     */
+    public abstract int repeat(@Nonnull final Runnable runnable, final int interval, final int delay);
+
+    /**
+     * Run a repeating task asynchronously.
+     *
+     * @param runnable the task to run
+     * @param interval in ticks
      */
     public abstract int repeat(@Nonnull final Runnable runnable, final int interval);
 

@@ -1,8 +1,10 @@
 package com.fastasyncworldedit.bukkit.listener;
 
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.configuration.Settings;
 import com.fastasyncworldedit.core.util.TaskManager;
+import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -100,7 +102,11 @@ public class RenderListener implements Listener {
                 }
             }
         }
-        player.setViewDistance(value);
+        if (FoliaSupport.isFolia() && !FoliaSupport.isOwnedByCurrentRegion(player)) {
+            FoliaSupport.runAtLocation(WorldEditPlugin.getInstance(), player.getLocation(), () -> player.setViewDistance(value));
+        } else {
+            player.setViewDistance(value);
+        }
     }
 
     private int getViewDistance(Player player) {

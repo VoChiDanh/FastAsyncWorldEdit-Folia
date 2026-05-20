@@ -41,10 +41,12 @@ public class ChunkListener9 extends ChunkListener {
                 event.setCancelled(true);
                 return;
             }
-            if (badChunks.containsKey(pair)) {
-                physCancelPair = pair;
-                event.setCancelled(true);
-                return;
+            synchronized (badChunks) {
+                if (badChunks.containsKey(pair)) {
+                    physCancelPair = pair;
+                    event.setCancelled(true);
+                    return;
+                }
             }
             if (System.currentTimeMillis() - physStart > Settings.settings().TICK_LIMITER.PHYSICS_MS) {
                 physCancelPair = pair;

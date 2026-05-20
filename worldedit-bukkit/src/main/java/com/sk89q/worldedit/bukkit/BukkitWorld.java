@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.bukkit.util.WorldUnloadedException;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.FaweCache;
@@ -387,7 +388,12 @@ public class BukkitWorld extends AbstractWorld {
     @Override
     public void dropItem(Vector3 pt, BaseItemStack item) {
         World world = getWorld();
-        world.dropItemNaturally(BukkitAdapter.adapt(world, pt), BukkitAdapter.adapt(item));
+        org.bukkit.Location location = BukkitAdapter.adapt(world, pt);
+        if (FoliaSupport.isFolia()) {
+            FoliaSupport.runAtLocation(WorldEditPlugin.getInstance(), location, () -> world.dropItemNaturally(location, BukkitAdapter.adapt(item)));
+        } else {
+            world.dropItemNaturally(location, BukkitAdapter.adapt(item));
+        }
     }
 
     @Override
@@ -399,7 +405,13 @@ public class BukkitWorld extends AbstractWorld {
         //FAWE start
         int X = pt.x() >> 4;
         int Z = pt.z() >> 4;
-        if (Fawe.isMainThread()) {
+        if (FoliaSupport.isFolia()) {
+            if (FoliaSupport.isOwnedByCurrentRegion(new org.bukkit.Location(world, pt.x(), pt.y(), pt.z()))) {
+                world.getChunkAt(X, Z);
+            } else {
+                PaperLib.getChunkAtAsync(world, X, Z, true);
+            }
+        } else if (Fawe.isMainThread()) {
             world.getChunkAt(X, Z);
         } else if (PaperLib.isPaper()) {
             PaperLib.getChunkAtAsync(world, X, Z, true);
@@ -529,7 +541,13 @@ public class BukkitWorld extends AbstractWorld {
         //FAWE start - safe edit region
         testCoords(pt);
         //FAWE end
-        getWorld().getBlockAt(pt.x(), pt.y(), pt.z()).breakNaturally();
+        World world = getWorld();
+        org.bukkit.Location location = new org.bukkit.Location(world, pt.x(), pt.y(), pt.z());
+        if (FoliaSupport.isFolia()) {
+            FoliaSupport.runAtLocation(WorldEditPlugin.getInstance(), location, () -> world.getBlockAt(location).breakNaturally());
+        } else {
+            world.getBlockAt(location).breakNaturally();
+        }
     }
 
     //FAWE start

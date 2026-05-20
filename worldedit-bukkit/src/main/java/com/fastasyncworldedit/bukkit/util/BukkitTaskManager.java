@@ -21,10 +21,15 @@ public class BukkitTaskManager extends TaskManager {
 
     @Override
     public int repeat(@Nonnull final Runnable runnable, final int interval) {
+        return repeat(runnable, interval, interval);
+    }
+
+    @Override
+    public int repeat(@Nonnull final Runnable runnable, final int interval, final int delay) {
         if (FoliaSupport.isFolia()) {
-            return registerFoliaTask(FoliaSupport.runGlobalRepeating(this.plugin, runnable, interval, interval));
+            return registerFoliaTask(FoliaSupport.runGlobalRepeating(this.plugin, runnable, delay, interval));
         }
-        return this.plugin.getServer().getScheduler().scheduleSyncRepeatingTask(this.plugin, runnable, interval, interval);
+        return this.plugin.getServer().getScheduler().scheduleSyncRepeatingTask(this.plugin, runnable, delay, interval);
     }
 
     @Override

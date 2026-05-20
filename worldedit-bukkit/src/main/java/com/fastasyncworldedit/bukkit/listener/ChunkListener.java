@@ -71,20 +71,24 @@ public abstract class ChunkListener implements Listener {
                 rateLimit--;
                 physicsFreeze = false;
                 itemFreeze = false;
-                lastZ = Integer.MIN_VALUE;
                 physSkip = 0;
                 physCancelPair = Long.MIN_VALUE;
                 physCancel = false;
                 lastCancelPos = null;
 
-                counter.clear();
-                for (Long2ObjectMap.Entry<Boolean> entry : badChunks.long2ObjectEntrySet()) {
-                    long key = entry.getLongKey();
-                    int x = MathMan.unpairIntX(key);
-                    int z = MathMan.unpairIntY(key);
-                    counter.put(key, badLimit);
+                synchronized (counter) {
+                    lastZ = Integer.MIN_VALUE;
+                    counter.clear();
+                    synchronized (badChunks) {
+                        for (Long2ObjectMap.Entry<Boolean> entry : badChunks.long2ObjectEntrySet()) {
+                            long key = entry.getLongKey();
+                            int x = MathMan.unpairIntX(key);
+                            int z = MathMan.unpairIntY(key);
+                            counter.put(key, badLimit);
+                        }
+                        badChunks.clear();
+                    }
                 }
-                badChunks.clear();
             }, Settings.settings().TICK_LIMITER.INTERVAL);
         }
     }
@@ -110,23 +114,29 @@ public abstract class ChunkListener implements Listener {
     private int lastZ = Integer.MIN_VALUE;
     private int[] lastCount;
 
+    private int[] getCountSynced(int cx, int cz) {
+        synchronized (counter) {
+            if (lastX == cx && lastZ == cz) {
+                return lastCount;
+            }
+            lastX = cx;
+            lastZ = cz;
+            long pair = MathMan.pairInt(cx, cz);
+            int[] tmp = lastCount = counter.get(pair);
+            if (tmp == null) {
+                lastCount = tmp = new int[3];
+                counter.put(pair, tmp);
+            }
+            return tmp;
+        }
+    }
+
     /**
      * @deprecated see {@link com.fastasyncworldedit.bukkit.listener.ChunkListener} for an explanation of the deprecation
      */
     @Deprecated(since = "2.0.0")
     public int[] getCount(int cx, int cz) {
-        if (lastX == cx && lastZ == cz) {
-            return lastCount;
-        }
-        lastX = cx;
-        lastZ = cz;
-        long pair = MathMan.pairInt(cx, cz);
-        int[] tmp = lastCount = counter.get(pair);
-        if (tmp == null) {
-            lastCount = tmp = new int[3];
-            counter.put(pair, tmp);
-        }
-        return tmp;
+        return getCountSynced(cx, cz);
     }
 
     /**
@@ -257,10 +267,12 @@ public abstract class ChunkListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            if (badChunks.containsKey(pair)) {
-                physCancelPair = pair;
-                event.setCancelled(true);
-                return;
+            synchronized (badChunks) {
+                if (badChunks.containsKey(pair)) {
+                    physCancelPair = pair;
+                    event.setCancelled(true);
+                    return;
+                }
             }
         } else {
             if ((++physSkip & 1023) != 0) {
@@ -327,13 +339,16 @@ public abstract class ChunkListener implements Listener {
 
     private void cancel(int cx, int cz) {
         long key = MathMan.pairInt(cx, cz);
-        badChunks.put(key, (Boolean) true);
-        counter.put(key, badLimit);
+        synchronized (badChunks) {
+            badChunks.put(key, (Boolean) true);
+        }
+        synchronized (counter) {
+            counter.put(key, badLimit);
+        }
         int[] count = getCount(cx, cz);
         count[0] = Integer.MAX_VALUE;
         count[1] = Integer.MAX_VALUE;
         count[2] = Integer.MAX_VALUE;
-
     }
 
     // Falling
