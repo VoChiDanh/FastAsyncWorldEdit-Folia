@@ -625,18 +625,20 @@ public class WorldEditPlugin extends JavaPlugin {
      */
     public BukkitPlayer wrapPlayer(Player player) {
         //FAWE start - Use cache over returning a direct BukkitPlayer
-        BukkitPlayer wePlayer = getCachedPlayer(player);
-        if (wePlayer != null) {
-            return wePlayer;
-        }
-        synchronized (player) {
-            BukkitPlayer bukkitPlayer = getCachedPlayer(player);
-            if (bukkitPlayer == null) {
-                bukkitPlayer = new BukkitPlayer(this, player);
-                player.setMetadata("WE", new FixedMetadataValue(this, bukkitPlayer));
+        return FoliaSupport.callAtEntity(this, player, () -> {
+            BukkitPlayer wePlayer = getCachedPlayer(player);
+            if (wePlayer != null) {
+                return wePlayer;
             }
-            return bukkitPlayer;
-        }
+            synchronized (player) {
+                BukkitPlayer bukkitPlayer = getCachedPlayer(player);
+                if (bukkitPlayer == null) {
+                    bukkitPlayer = new BukkitPlayer(this, player);
+                    player.setMetadata("WE", new FixedMetadataValue(this, bukkitPlayer));
+                }
+                return bukkitPlayer;
+            }
+        });
         //FAWE end
     }
 
@@ -650,11 +652,13 @@ public class WorldEditPlugin extends JavaPlugin {
     }
 
     BukkitPlayer reCachePlayer(Player player) {
-        synchronized (player) {
-            BukkitPlayer wePlayer = new BukkitPlayer(this, player);
-            player.setMetadata("WE", new FixedMetadataValue(this, wePlayer));
-            return wePlayer;
-        }
+        return FoliaSupport.callAtEntity(this, player, () -> {
+            synchronized (player) {
+                BukkitPlayer wePlayer = new BukkitPlayer(this, player);
+                player.setMetadata("WE", new FixedMetadataValue(this, wePlayer));
+                return wePlayer;
+            }
+        });
     }
     //FAWE end
 

@@ -139,17 +139,17 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public BaseItemStack getItemInHand(HandSide handSide) {
-        ItemStack itemStack = handSide == HandSide.MAIN_HAND
+        ItemStack itemStack = syncEntity(() -> handSide == HandSide.MAIN_HAND
                 ? player.getInventory().getItemInMainHand()
-                : player.getInventory().getItemInOffHand();
+                : player.getInventory().getItemInOffHand());
         return BukkitAdapter.adapt(itemStack);
     }
 
     @Override
     public BaseBlock getBlockInHand(HandSide handSide) throws WorldEditException {
-        ItemStack itemStack = handSide == HandSide.MAIN_HAND
+        ItemStack itemStack = syncEntity(() -> handSide == HandSide.MAIN_HAND
                 ? player.getInventory().getItemInMainHand()
-                : player.getInventory().getItemInOffHand();
+                : player.getInventory().getItemInOffHand());
         return BukkitAdapter.asBlockState(itemStack).toBaseBlock();
     }
 
@@ -160,7 +160,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public String getDisplayName() {
-        return player.getDisplayName();
+        return syncEntity(player::getDisplayName);
     }
 
     //FAWE start
@@ -338,18 +338,21 @@ public class BukkitPlayer extends AbstractPlayerActor {
             }
         }
         if (usesuperperms) {
-            if (this.permAttachment == null) {
-                this.permAttachment = plugin.getPermissionAttachmentManager().getOrAddAttachment(player);
-            }
-            if (this.permAttachment == null) {
-                LOGGER.warn(
-                        "Attempted to set permission for offline player `{}`, UUID: `{}`?!",
-                        player.getName(),
-                        player.getUniqueId()
-                );
-                return;
-            }
-            permAttachment.setPermission(permission, value);
+            syncEntity(() -> {
+                if (this.permAttachment == null) {
+                    this.permAttachment = plugin.getPermissionAttachmentManager().getOrAddAttachment(player);
+                }
+                if (this.permAttachment == null) {
+                    LOGGER.warn(
+                            "Attempted to set permission for offline player `{}`, UUID: `{}`?!",
+                            player.getName(),
+                            player.getUniqueId()
+                    );
+                    return null;
+                }
+                permAttachment.setPermission(permission, value);
+                return null;
+            });
         }
     }
     //FAWE end
@@ -544,8 +547,11 @@ public class BukkitPlayer extends AbstractPlayerActor {
 
     @Override
     public void unregister() {
-        player.removeMetadata("WE", WorldEditPlugin.getInstance());
-        plugin.getPermissionAttachmentManager().removeAttachment(player);
+        syncEntity(() -> {
+            player.removeMetadata("WE", WorldEditPlugin.getInstance());
+            plugin.getPermissionAttachmentManager().removeAttachment(player);
+            return null;
+        });
         super.unregister();
     }
     //FAWE end

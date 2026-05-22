@@ -14,6 +14,7 @@ import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -223,7 +224,15 @@ public final class FoliaSupport {
         Objects.requireNonNull(plugin);
         Objects.requireNonNull(location);
         Objects.requireNonNull(runnable);
-        if (!FOLIA || isOwnedByCurrentRegion(location)) {
+        if (!FOLIA) {
+            if (Bukkit.isPrimaryThread()) {
+                runnable.run();
+            } else {
+                Bukkit.getScheduler().runTask(plugin, runnable);
+            }
+            return;
+        }
+        if (isOwnedByCurrentRegion(location)) {
             runnable.run();
             return;
         }
@@ -246,11 +255,42 @@ public final class FoliaSupport {
         invokeTask(regionScheduler(), REGION_RUN_DELAYED_LOCATION, plugin, location, wrap(runnable), normalizeTickDelay(delayTicks));
     }
 
+    public static <T> T callAtLocation(@Nonnull Plugin plugin, @Nonnull Location location, @Nonnull Supplier<T> supplier) {
+        Objects.requireNonNull(plugin);
+        Objects.requireNonNull(location);
+        Objects.requireNonNull(supplier);
+        if (!FOLIA) {
+            if (Bukkit.isPrimaryThread()) {
+                return supplier.get();
+            }
+            return join(Bukkit.getScheduler().callSyncMethod(plugin, supplier::get));
+        }
+        if (isOwnedByCurrentRegion(location)) {
+            return supplier.get();
+        }
+        CompletableFuture<T> future = new CompletableFuture<>();
+        invokeTask(regionScheduler(), REGION_RUN_LOCATION, plugin, location, wrap(() -> complete(future, supplier)));
+        return join(future);
+    }
+
+    public static <T> T callAtBlock(@Nonnull Plugin plugin, @Nonnull Block block, @Nonnull Supplier<T> supplier) {
+        Objects.requireNonNull(plugin);
+        Objects.requireNonNull(block);
+        Objects.requireNonNull(supplier);
+        return callAtLocation(plugin, block.getLocation(), supplier);
+    }
+
     public static <T> T callAtEntity(@Nonnull Plugin plugin, @Nonnull Entity entity, @Nonnull Supplier<T> supplier) {
         Objects.requireNonNull(plugin);
         Objects.requireNonNull(entity);
         Objects.requireNonNull(supplier);
-        if (!FOLIA || isOwnedByCurrentRegion(entity)) {
+        if (!FOLIA) {
+            if (Bukkit.isPrimaryThread()) {
+                return supplier.get();
+            }
+            return join(Bukkit.getScheduler().callSyncMethod(plugin, supplier::get));
+        }
+        if (isOwnedByCurrentRegion(entity)) {
             return supplier.get();
         }
         CompletableFuture<T> future = new CompletableFuture<>();
@@ -284,14 +324,21 @@ public final class FoliaSupport {
         Objects.requireNonNull(plugin);
         Objects.requireNonNull(entity);
         Objects.requireNonNull(location);
+        return join(teleportAsync(plugin, entity, location));
+    }
+
+    public static CompletableFuture<Boolean> teleportAsync(@Nonnull Plugin plugin, @Nonnull Entity entity, @Nonnull Location location) {
+        Objects.requireNonNull(plugin);
+        Objects.requireNonNull(entity);
+        Objects.requireNonNull(location);
         if (!FOLIA) {
-            return entity.teleport(location);
+            return CompletableFuture.completedFuture(callAtEntity(plugin, entity, () -> entity.teleport(location)));
         }
         try {
             Object future = entity.getClass().getMethod("teleportAsync", Location.class).invoke(entity, location);
             if (future instanceof CompletableFuture) {
                 @SuppressWarnings("unchecked") CompletableFuture<Boolean> teleportFuture = (CompletableFuture<Boolean>) future;
-                return join(teleportFuture);
+                return teleportFuture;
             }
         } catch (NoSuchMethodException ignored) {
         } catch (IllegalAccessException e) {
@@ -306,7 +353,7 @@ public final class FoliaSupport {
             }
             throw new IllegalStateException("Failed to invoke teleportAsync", cause);
         }
-        return callAtEntity(plugin, entity, () -> entity.teleport(location));
+        return CompletableFuture.completedFuture(callAtEntity(plugin, entity, () -> entity.teleport(location)));
     }
 
     public static void runAtBlock(@Nonnull Plugin plugin, @Nonnull Block block, @Nonnull Runnable runnable) {
@@ -356,6 +403,14 @@ public final class FoliaSupport {
     }
 
     private static <T> T join(CompletableFuture<T> future) {
+        return joinFuture(future);
+    }
+
+    private static <T> T join(Future<T> future) {
+        return joinFuture(future);
+    }
+
+    private static <T> T joinFuture(Future<T> future) {
         try {
             return future.get();
         } catch (InterruptedException e) {

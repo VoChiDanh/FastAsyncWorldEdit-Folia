@@ -15,7 +15,7 @@ public class BukkitPermissionAttachmentManager {
 
     private final WorldEditPlugin plugin;
     private final Map<Player, PermissionAttachment> attachments = Collections.synchronizedMap(new WeakHashMap<>());
-    private PermissionAttachment noopAttachment;
+    private volatile PermissionAttachment noopAttachment;
 
     public BukkitPermissionAttachmentManager(WorldEditPlugin plugin) {
         this.plugin = plugin;
@@ -31,18 +31,27 @@ public class BukkitPermissionAttachmentManager {
         }
         if (p.hasMetadata("NPC")) {
             if (this.noopAttachment == null) {
-                this.noopAttachment = new PermissionAttachment(plugin, new PermissibleBase(null));
+                synchronized (this) {
+                    if (this.noopAttachment == null) {
+                        this.noopAttachment = new PermissionAttachment(plugin, new PermissibleBase(null));
+                    }
+                }
             }
             return noopAttachment;
         }
-        return attachments.computeIfAbsent(p, k -> k.addAttachment(plugin));
+        synchronized (attachments) {
+            return attachments.computeIfAbsent(p, k -> k.addAttachment(plugin));
+        }
     }
 
     public void removeAttachment(@Nullable final Player p) {
         if (p == null) {
             return;
         }
-        PermissionAttachment attach = attachments.remove(p);
+        PermissionAttachment attach;
+        synchronized (attachments) {
+            attach = attachments.remove(p);
+        }
         if (attach != null) {
             attach.remove();
         }

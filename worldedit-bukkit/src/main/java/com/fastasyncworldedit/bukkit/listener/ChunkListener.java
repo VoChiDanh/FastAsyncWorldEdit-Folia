@@ -53,8 +53,8 @@ import org.bukkit.util.Vector;
 public abstract class ChunkListener implements Listener {
 
     private static final Logger LOGGER = LogManagerCompat.getLogger();
-    protected int rateLimit = 0;
-    protected Location lastCancelPos;
+    protected volatile int rateLimit = 0;
+    protected volatile Location lastCancelPos;
     private final int[] badLimit = new int[]{Settings.settings().TICK_LIMITER.PHYSICS_MS,
             Settings.settings().TICK_LIMITER.FALLING, Settings.settings().TICK_LIMITER.ITEMS};
 
@@ -101,12 +101,12 @@ public abstract class ChunkListener implements Listener {
      * @deprecated see {@link com.fastasyncworldedit.bukkit.listener.ChunkListener} for an explanation of the deprecation
      */
     @Deprecated(since = "2.0.0")
-    public static boolean physicsFreeze = false;
+    public static volatile boolean physicsFreeze = false;
     /**
      * @deprecated see {@link com.fastasyncworldedit.bukkit.listener.ChunkListener} for an explanation of the deprecation
      */
     @Deprecated(since = "2.0.0")
-    public static boolean itemFreeze = false;
+    public static volatile boolean itemFreeze = false;
 
     protected final Long2ObjectOpenHashMap<Boolean> badChunks = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<int[]> counter = new Long2ObjectOpenHashMap<>();
@@ -152,12 +152,12 @@ public abstract class ChunkListener implements Listener {
 
     }
 
-    protected int physSkip;
-    protected boolean physCancel;
-    protected long physCancelPair;
+    protected volatile int physSkip;
+    protected volatile boolean physCancel;
+    protected volatile long physCancelPair;
 
-    protected long physStart;
-    protected long physTick;
+    protected volatile long physStart;
+    protected volatile long physTick;
 
     /**
      * @deprecated see {@link com.fastasyncworldedit.bukkit.listener.ChunkListener} for an explanation of the deprecation

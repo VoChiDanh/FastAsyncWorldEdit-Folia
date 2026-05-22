@@ -197,20 +197,20 @@ public class BukkitBlockCommandSender extends AbstractCommandBlockActor {
                     if (FoliaSupport.isOwnedByCurrentRegion(block)) {
                         updateActive();
                     } else {
-                        FoliaSupport.runAtBlock(plugin, block, this::updateActive);
+                        FoliaSupport.callAtBlock(plugin, block, () -> {
+                            updateActive();
+                            return null;
+                        });
                     }
                 } else if (Bukkit.isPrimaryThread()) {
                     // we can update eagerly
                     updateActive();
                 } else {
                     // we should update it eventually
-                    Bukkit.getScheduler().callSyncMethod(
-                            plugin,
-                            () -> {
-                                updateActive();
-                                return null;
-                            }
-                    );
+                    FoliaSupport.callAtBlock(plugin, block, () -> {
+                        updateActive();
+                        return null;
+                    });
                 }
                 return active;
             }
