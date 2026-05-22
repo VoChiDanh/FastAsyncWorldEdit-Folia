@@ -19,6 +19,7 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.sk89q.bukkit.util.CommandInspector;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.platform.Actor;
@@ -76,9 +77,24 @@ class BukkitCommandInspector implements CommandInspector {
         Optional<org.enginehub.piston.Command> mapping = dispatcher.getCommand(command.getName());
         if (mapping.isPresent()) {
             InjectedValueStore store = MapBackedValueStore.create();
-            store.injectValue(Key.of(Actor.class), context ->
-                    Optional.of(plugin.wrapCommandSender(sender)));
-            return mapping.get().getCondition().satisfied(store);
+            store.injectValue(Key.of(Actor.class), context -> {
+                try {
+                    return Optional.of(plugin.wrapCommandSender(sender));
+                } catch (RuntimeException e) {
+                    if (FoliaSupport.isEntitySchedulerRetired(e)) {
+                        return Optional.empty();
+                    }
+                    throw e;
+                }
+            });
+            try {
+                return mapping.get().getCondition().satisfied(store);
+            } catch (RuntimeException e) {
+                if (FoliaSupport.isEntitySchedulerRetired(e)) {
+                    return false;
+                }
+                throw e;
+            }
         } else {
             LOGGER.warn("BukkitCommandInspector doesn't know how about the command '" + command + "'");
             return false;
