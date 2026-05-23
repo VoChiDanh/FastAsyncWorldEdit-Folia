@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-folia-26.1.2
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -35,7 +39,18 @@ jobs:
           name: FastAsyncWorldEdit-Folia-26.1.2
           path: worldedit-bukkit/build/libs/FastAsyncWorldEdit-*-*.jar
           if-no-files-found: error
+      - name: Remove Existing Release Jars
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view Folia_26.1.2 >/dev/null 2>&1; then
+            exit 0
+          fi
 
+          gh release view Folia_26.1.2 --json assets --jq '.assets[] | select(.name | endswith(".jar")) | .name' \
+            | while IFS= read -r asset; do
+                gh release delete-asset Folia_26.1.2 "$asset" -y
+              done
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
