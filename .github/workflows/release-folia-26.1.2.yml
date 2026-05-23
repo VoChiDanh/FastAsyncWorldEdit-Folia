@@ -2,7 +2,7 @@ name: Release Folia 26.1.2
 
 on:
   push:
-    tags:
+    branches:
       - main
   workflow_dispatch:
 
