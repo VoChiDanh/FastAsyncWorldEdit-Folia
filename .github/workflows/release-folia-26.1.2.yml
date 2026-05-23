@@ -1,0 +1,45 @@
+name: Release Folia 26.1.2
+
+on:
+  push:
+    tags:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          cache: gradle
+          java-version: 25
+
+      - name: Build
+        run: ./gradlew clean build --no-daemon
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: FastAsyncWorldEdit-Folia-26.1.2
+          path: worldedit-bukkit/build/libs/FastAsyncWorldEdit-*-*.jar
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: Folia_26.1.2
+          name: Folia 26.1.2
+          files: worldedit-bukkit/build/libs/FastAsyncWorldEdit-*-*.jar
+          fail_on_unmatched_files: true
