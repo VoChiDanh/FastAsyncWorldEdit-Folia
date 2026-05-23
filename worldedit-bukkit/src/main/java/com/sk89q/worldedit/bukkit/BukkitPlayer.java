@@ -311,7 +311,7 @@ public class BukkitPlayer extends AbstractPlayerActor {
             return syncEntity(() -> (!plugin.getLocalConfiguration().noOpPermissions && player.isOp())
                     || plugin.getPermissionsResolver().hasPermission(player.getWorld().getName(), player, perm));
         } catch (RuntimeException e) {
-            if (wasInterrupted(e) || FoliaSupport.isEntitySchedulerRetired(e)) {
+            if (FoliaSupport.wasInterrupted(e) || FoliaSupport.isEntitySchedulerRetired(e)) {
                 return false;
             }
             throw e;
@@ -561,15 +561,5 @@ public class BukkitPlayer extends AbstractPlayerActor {
             return FoliaSupport.callAtEntity(plugin, player, supplier);
         }
         return TaskManager.taskManager().sync(supplier);
-    }
-
-    private static boolean wasInterrupted(Throwable throwable) {
-        while (throwable != null) {
-            if (throwable instanceof InterruptedException) {
-                return true;
-            }
-            throwable = throwable.getCause();
-        }
-        return false;
     }
 }

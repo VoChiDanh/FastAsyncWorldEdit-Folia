@@ -81,7 +81,7 @@ class BukkitCommandInspector implements CommandInspector {
                 try {
                     return Optional.of(plugin.wrapCommandSender(sender));
                 } catch (RuntimeException e) {
-                    if (FoliaSupport.isEntitySchedulerRetired(e)) {
+                    if (FoliaSupport.wasInterrupted(e) || FoliaSupport.isEntitySchedulerRetired(e)) {
                         return Optional.empty();
                     }
                     throw e;
@@ -90,7 +90,7 @@ class BukkitCommandInspector implements CommandInspector {
             try {
                 return mapping.get().getCondition().satisfied(store);
             } catch (RuntimeException e) {
-                if (FoliaSupport.isEntitySchedulerRetired(e)) {
+                if (FoliaSupport.wasInterrupted(e) || FoliaSupport.isEntitySchedulerRetired(e)) {
                     return false;
                 }
                 throw e;

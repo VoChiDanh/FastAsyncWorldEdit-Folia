@@ -320,6 +320,16 @@ public final class FoliaSupport {
         return false;
     }
 
+    public static boolean wasInterrupted(Throwable throwable) {
+        while (throwable != null) {
+            if (throwable instanceof InterruptedException) {
+                return true;
+            }
+            throwable = throwable.getCause();
+        }
+        return false;
+    }
+
     public static boolean teleport(@Nonnull Plugin plugin, @Nonnull Entity entity, @Nonnull Location location) {
         Objects.requireNonNull(plugin);
         Objects.requireNonNull(entity);
