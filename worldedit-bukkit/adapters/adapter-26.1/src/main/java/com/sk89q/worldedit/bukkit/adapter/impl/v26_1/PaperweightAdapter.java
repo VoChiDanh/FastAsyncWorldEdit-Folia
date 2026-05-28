@@ -228,7 +228,7 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         var unused = CraftServer.class.cast(Bukkit.getServer());
 
         int dataVersion = SharedConstants.getCurrentVersion().dataVersion().version();
-        if (dataVersion != Constants.DATA_VERSION_MC_26_1 && dataVersion != Constants.DATA_VERSION_MC_26_1_1) {
+        if (dataVersion != Constants.DATA_VERSION_MC_26_1 && dataVersion != Constants.DATA_VERSION_MC_26_1_1 && dataVersion != Constants.DATA_VERSION_MC_26_1_2) {
             logger.warning(WRONG_VERSION);
         }
 
@@ -1091,6 +1091,19 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
             throw new IllegalArgumentException("Don't know how to make native " + foreign.getClass().getCanonicalName());
         }
     }
+
+    // FAWE start
+    /**
+     * Converts a WorldEdit-native NBT structure to a NMS structure.
+     *
+     * @param foreign structure to convert
+     * @return non-native structure
+     */
+    @Override
+    public Tag fromNativeLin(LinTag<?> foreign) {
+        return this.fromNative(foreign);
+    }
+    // FAWE end
 
     private static byte identifyRawElementType(net.minecraft.nbt.ListTag list) {
         byte b = 0;
