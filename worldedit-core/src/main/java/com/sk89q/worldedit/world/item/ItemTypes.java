@@ -3011,7 +3011,7 @@ public final class ItemTypes {
                 ItemTypesCache.init(); // force class to load
             }
             String name = fieldsTmp[initIndex++].getName().toLowerCase(Locale.ROOT);
-            return ItemType.REGISTRY.get(name);
+            return ItemType.REGISTRY.getMap().get("minecraft:" + name);
         } catch (Throwable e) {
             e.printStackTrace();
             throw e;

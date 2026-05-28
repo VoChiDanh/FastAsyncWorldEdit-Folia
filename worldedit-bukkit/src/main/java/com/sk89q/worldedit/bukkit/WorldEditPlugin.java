@@ -25,6 +25,7 @@ import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.util.UpdateNotification;
 import com.fastasyncworldedit.core.util.WEManager;
+import com.fastasyncworldedit.core.world.block.ItemTypesCache;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.sk89q.bukkit.util.ClassSourceValidator;
@@ -345,6 +346,7 @@ public class WorldEditPlugin extends JavaPlugin {
             }
         }
 */
+        ItemTypesCache.init();
 
         // Entity
         for (org.bukkit.entity.EntityType entityType : org.bukkit.entity.EntityType.values()) {
@@ -758,9 +760,19 @@ public class WorldEditPlugin extends JavaPlugin {
             }
 
             CommandSuggestionEvent suggestEvent = new CommandSuggestionEvent(wrapCommandSender(event.getSender()), buffer);
-            getWorldEdit().getEventBus().post(suggestEvent);
-
-            event.setCompletions(CommandUtil.fixSuggestions(buffer, suggestEvent.getSuggestions()));
+            try {
+                getWorldEdit().getEventBus().post(suggestEvent);
+                event.setCompletions(CommandUtil.fixSuggestions(buffer, suggestEvent.getSuggestions()));
+            } catch (RuntimeException e) {
+                if (FoliaSupport.wasInterrupted(e)) {
+                    Thread.currentThread().interrupt();
+                    event.setCompletions(List.of());
+                } else if (FoliaSupport.isEntitySchedulerRetired(e)) {
+                    event.setCompletions(List.of());
+                } else {
+                    throw e;
+                }
+            }
             event.setHandled(true);
         }
 
