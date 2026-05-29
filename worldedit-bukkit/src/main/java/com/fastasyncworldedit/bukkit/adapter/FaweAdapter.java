@@ -14,14 +14,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.TreeType;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -117,46 +113,30 @@ public abstract class FaweAdapter<TAG, SERVER_LEVEL> extends CachedBukkitAdapter
     }
 
     private boolean generateTreeFoliaInternal(TreeType treeType, EditSession editSession, BlockVector3 target, World world) {
-        Set<BlockVector3> beforeBlocks = new HashSet<>();
-        int radius = 10;
-        int height = 32;
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -5; y <= height; y++) {
-                for (int z = -radius; z <= radius; z++) {
-                    BlockVector3 position = target.add(x, y, z);
-                    Block block = world.getBlockAt(position.x(), position.y(), position.z());
-                    if (block.getType() != Material.AIR) {
-                        beforeBlocks.add(position);
-                    }
-                }
+        SERVER_LEVEL serverLevel = getServerLevel(world);
+        preCaptureStates(serverLevel);
+        List<BlockState> placed;
+        try {
+            if (!world.generateTree(BukkitAdapter.adapt(world, target), treeType)) {
+                return false;
             }
+            placed = getCapturedBlockStatesCopy(serverLevel);
+        } finally {
+            postCaptureBlockStates(serverLevel);
         }
 
-        if (!world.generateTree(BukkitAdapter.adapt(world, target), treeType)) {
+        if (placed == null || placed.isEmpty()) {
             return false;
         }
-
-        List<BlockState> newBlocks = new ArrayList<>();
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -5; y <= height; y++) {
-                for (int z = -radius; z <= radius; z++) {
-                    BlockVector3 position = target.add(x, y, z);
-                    if (!beforeBlocks.contains(position)) {
-                        Block block = world.getBlockAt(position.x(), position.y(), position.z());
-                        if (block.getType() != Material.AIR) {
-                            newBlocks.add(block.getState());
-                        }
-                    }
-                }
+        for (BlockState blockState : placed) {
+            if (blockState == null) {
+                continue;
             }
-        }
-
-        for (BlockState blockState : newBlocks) {
             editSession.setBlock(blockState.getX(), blockState.getY(), blockState.getZ(),
                     BukkitAdapter.adapt(blockState.getBlockData())
             );
         }
-        return !newBlocks.isEmpty();
+        return true;
     }
 
     protected <T> T syncRegion(World world, BlockVector3 point, java.util.function.Supplier<T> supplier) {

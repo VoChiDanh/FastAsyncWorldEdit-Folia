@@ -12,6 +12,7 @@ import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.bukkit.BukkitWorld;
 import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.extent.Extent;
+import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import com.sk89q.worldedit.function.pattern.Pattern;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.Region;
@@ -25,6 +26,7 @@ import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.WorldInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
@@ -36,6 +38,8 @@ import java.util.function.BooleanSupplier;
  * Represents an abstract regeneration handler.
  */
 public abstract class Regenerator {
+
+    private static final Logger LOGGER = LogManagerCompat.getLogger();
 
     protected final org.bukkit.World originalBukkitWorld;
     protected final Region region;
@@ -114,11 +118,13 @@ public abstract class Regenerator {
         Object foliaTask = null;
         if (FoliaUtil.isFoliaServer()) {
             World freshWorld = getFreshWorld();
-            World world = freshWorld != null ? freshWorld : originalBukkitWorld;
+            if (freshWorld == null) {
+                throw new IllegalStateException("Folia regen requires the temporary world to pump generation tasks");
+            }
             BlockVector3 min = region.getMinimumPoint();
             foliaTask = Bukkit.getServer().getRegionScheduler().runAtFixedRate(
                     WorldEditPlugin.getInstance(),
-                    new Location(world, min.x(), min.y(), min.z()),
+                    new Location(freshWorld, min.x(), min.y(), min.z()),
                     scheduledTask -> {
                         final long startTime = System.nanoTime();
                         runTasks(() -> System.nanoTime() - startTime < timeoutPerTick);
@@ -132,31 +138,47 @@ public abstract class Regenerator {
                 runTasks(() -> System.nanoTime() - startTime < timeoutPerTick);
             }, 1);
         }
-        //Setting Blocks
-        boolean genbiomes = options.shouldRegenBiomes();
-        boolean hasBiome = options.hasBiomeType();
-        BiomeType biome = options.getBiomeType();
-        Pattern pattern;
-        if (!genbiomes && !hasBiome) {
-            pattern = new PlacementPattern();
-        } else if (hasBiome) {
-            pattern = new WithBiomePlacementPattern((ignored1, ignored2) -> biome);
-        } else {
-            pattern = new WithBiomePlacementPattern((vec, chunk) -> {
-                if (chunk != null) {
-                    return chunk.getBiomeType(vec.x() & 15, vec.y(), vec.z() & 15);
-                }
-                return source.getBiome(vec);
-            });
-        }
         try {
+            //Setting Blocks
+            boolean genbiomes = options.shouldRegenBiomes();
+            boolean hasBiome = options.hasBiomeType();
+            BiomeType biome = options.getBiomeType();
+            Pattern pattern;
+            if (!genbiomes && !hasBiome) {
+                pattern = new PlacementPattern();
+            } else if (hasBiome) {
+                pattern = new WithBiomePlacementPattern((ignored1, ignored2) -> biome);
+            } else {
+                pattern = new WithBiomePlacementPattern((vec, chunk) -> {
+                    if (chunk != null) {
+                        return chunk.getBiomeType(vec.x() & 15, vec.y(), vec.z() & 15);
+                    }
+                    return source.getBiome(vec);
+                });
+            }
             target.setBlocks(region, pattern);
         } finally {
             if (foliaTask != null) {
-                FoliaSupport.cancelTask(foliaTask);
+                cancelFoliaTask(foliaTask);
             } else {
-                TaskManager.taskManager().cancel(taskId);
+                cancelTask(taskId);
             }
+        }
+    }
+
+    private void cancelFoliaTask(Object foliaTask) {
+        try {
+            FoliaSupport.cancelTask(foliaTask);
+        } catch (RuntimeException e) {
+            LOGGER.warn("Failed to cancel Folia regen task pump", e);
+        }
+    }
+
+    private void cancelTask(int taskId) {
+        try {
+            TaskManager.taskManager().cancel(taskId);
+        } catch (RuntimeException e) {
+            LOGGER.warn("Failed to cancel regen task pump", e);
         }
     }
 

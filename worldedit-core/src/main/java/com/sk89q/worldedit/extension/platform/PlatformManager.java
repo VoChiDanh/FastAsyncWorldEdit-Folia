@@ -410,6 +410,10 @@ public class PlatformManager {
         return tool;
     }
 
+    private boolean runPlayerInputAction(Player player, Runnable action, boolean checkFree) {
+        return player.runAction(action, checkFree, !FoliaUtil.isFoliaServer());
+    }
+
     @Subscribe
     public void handleBlockInteract(BlockInteractEvent event) {
         // Create a proxy actor with a potentially different world for
@@ -436,10 +440,10 @@ public class PlatformManager {
                     final BlockTool superPickaxe = session.getSuperPickaxe();
                     if (superPickaxe != null && superPickaxe.canUse(player)) {
                         //FAWE start - run async
-                        player.runAction(() -> reset(superPickaxe)
+                        runPlayerInputAction(player, () -> reset(superPickaxe)
                                 .actPrimary(queryCapability(Capability.WORLD_EDITING),
                                         getConfiguration(), player, session, location, event.getFace()
-                                ), false, !FoliaUtil.isFoliaServer());
+                                ), false);
                         //FAWE end
                         event.setCancelled(true);
                         return;
@@ -449,10 +453,10 @@ public class PlatformManager {
                 Tool tool = session.getTool(player);
                 if (tool instanceof DoubleActionBlockTool && tool.canUse(player)) {
                     //FAWE start - run async
-                    player.runAction(() -> reset((DoubleActionBlockTool) tool)
+                    runPlayerInputAction(player, () -> reset((DoubleActionBlockTool) tool)
                             .actSecondary(queryCapability(Capability.WORLD_EDITING),
                                     getConfiguration(), player, session, location, event.getFace()
-                            ), false, !FoliaUtil.isFoliaServer());
+                            ), false);
                     //FAWE end
                     event.setCancelled(true);
                 }
@@ -463,7 +467,7 @@ public class PlatformManager {
                 if (tool instanceof BlockTool && tool.canUse(player)) {
                     if (player.checkAction()) {
                         // FAWE run async
-                        player.runAction(() -> {
+                        runPlayerInputAction(player, () -> {
                             BlockTool blockTool = (BlockTool) tool;
                             if (!(tool instanceof BrushTool)) {
                                 blockTool = reset(blockTool);
@@ -471,7 +475,7 @@ public class PlatformManager {
                             blockTool.actPrimary(queryCapability(Capability.WORLD_EDITING),
                                     getConfiguration(), player, session, location, event.getFace()
                             );
-                        }, false, !FoliaUtil.isFoliaServer());
+                        }, false);
                         //FAWE end
                         event.setCancelled(true);
                     }
@@ -511,10 +515,10 @@ public class PlatformManager {
                     if (tool instanceof DoubleActionTraceTool && tool.canUse(player)) {
                         //FAWE start - run async
                         if (FoliaUtil.isFoliaServer()) {
-                            player.runIfFree(() -> reset((DoubleActionTraceTool) tool)
+                            runPlayerInputAction(player, () -> reset((DoubleActionTraceTool) tool)
                                     .actSecondary(queryCapability(Capability.WORLD_EDITING),
                                             getConfiguration(), player, session
-                                    ));
+                                    ), true);
                         } else {
                             player.runAsyncIfFree(() -> reset((DoubleActionTraceTool) tool)
                                     .actSecondary(queryCapability(Capability.WORLD_EDITING),
@@ -534,9 +538,9 @@ public class PlatformManager {
                     if (tool instanceof TraceTool && tool.canUse(player)) {
                         //FAWE start - run async
                         //todo this needs to be fixed so the event is canceled after actPrimary is used and returns true
-                        player.runAction(() -> reset((TraceTool) tool).actPrimary(queryCapability(Capability.WORLD_EDITING),
+                        runPlayerInputAction(player, () -> reset((TraceTool) tool).actPrimary(queryCapability(Capability.WORLD_EDITING),
                                 getConfiguration(), player, session
-                        ), false, true);
+                        ), false);
                         //FAWE end
                         event.setCancelled(true);
                         return;
