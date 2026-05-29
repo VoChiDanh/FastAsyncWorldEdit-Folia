@@ -10,12 +10,17 @@ import com.fastasyncworldedit.core.queue.IChunkSet;
 import com.fastasyncworldedit.core.queue.IQueueExtent;
 import com.fastasyncworldedit.core.queue.implementation.QueueHandler;
 import com.fastasyncworldedit.core.queue.implementation.blocks.CharGetBlocks;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.util.MemUtil;
+import com.fastasyncworldedit.core.util.FoliaUtil;
 import com.fastasyncworldedit.core.util.task.FaweThreadUtil;
+import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.internal.util.LogManagerCompat;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import org.apache.logging.log4j.Logger;
+import org.bukkit.Location;
+import org.bukkit.World;
 
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -23,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends CharGetBlocks {
@@ -170,6 +176,16 @@ public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends C
                     throw e;
                 }
             };
+            if (FoliaUtil.isFoliaServer()) {
+                FutureTask<Future<?>> regionTask = new FutureTask<>(chain);
+                FoliaSupport.runAtLocation(
+                        WorldEditPlugin.getInstance(),
+                        new Location(getBukkitWorld(), chunkX << 4, 0, chunkZ << 4),
+                        regionTask
+                );
+                //noinspection unchecked - required at compile time
+                return (T) (Future) regionTask;
+            }
             //noinspection unchecked - required at compile time
             return (T) (Future) queueHandler.sync(chain);
         } else {
@@ -180,6 +196,14 @@ public abstract class AbstractBukkitGetBlocks<ServerLevel, LevelChunk> extends C
             }
         }
         return null;
+    }
+
+    private World getBukkitWorld() {
+        try {
+            return (World) serverLevel.getClass().getMethod("getWorld").invoke(serverLevel);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to resolve Bukkit world for chunk sync task", e);
+        }
     }
 
     @Override

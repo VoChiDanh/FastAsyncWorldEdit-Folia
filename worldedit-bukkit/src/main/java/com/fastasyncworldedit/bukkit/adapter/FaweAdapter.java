@@ -1,20 +1,28 @@
 package com.fastasyncworldedit.bukkit.adapter;
 
+import com.fastasyncworldedit.core.util.FoliaUtil;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.bukkit.BukkitWorld;
+import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.bukkit.adapter.BukkitImplAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.registry.state.Property;
 import com.sk89q.worldedit.util.TreeGenerator;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.TreeType;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A base class for version-specific implementations of the BukkitImplAdapter
@@ -53,6 +61,9 @@ public abstract class FaweAdapter<TAG, SERVER_LEVEL> extends CachedBukkitAdapter
         }
         BlockVector3 target = blockVector3;
         SERVER_LEVEL serverLevel = getServerLevel(world);
+        if (FoliaUtil.isFoliaServer()) {
+            return generateTreeFolia(bukkitType, editSession, target, world);
+        }
         List<BlockState> placed = TaskManager.taskManager().sync(() -> {
             preCaptureStates(serverLevel);
             try {
@@ -77,6 +88,99 @@ public abstract class FaweAdapter<TAG, SERVER_LEVEL> extends CachedBukkitAdapter
             );
         }
         return true;
+    }
+
+    private boolean generateTreeFolia(TreeType treeType, EditSession editSession, BlockVector3 target, World world) {
+        if (Bukkit.isOwnedByCurrentRegion(world, target.x() >> 4, target.z() >> 4)) {
+            return generateTreeFoliaInternal(treeType, editSession, target, world);
+        }
+
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getServer().getRegionScheduler().run(
+                WorldEditPlugin.getInstance(),
+                world,
+                target.x() >> 4,
+                target.z() >> 4,
+                task -> {
+                    try {
+                        future.complete(generateTreeFoliaInternal(treeType, editSession, target, world));
+                    } catch (Throwable throwable) {
+                        future.completeExceptionally(throwable);
+                    }
+                }
+        );
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate tree on Folia", e);
+        }
+    }
+
+    private boolean generateTreeFoliaInternal(TreeType treeType, EditSession editSession, BlockVector3 target, World world) {
+        Set<BlockVector3> beforeBlocks = new HashSet<>();
+        int radius = 10;
+        int height = 32;
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -5; y <= height; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockVector3 position = target.add(x, y, z);
+                    Block block = world.getBlockAt(position.x(), position.y(), position.z());
+                    if (block.getType() != Material.AIR) {
+                        beforeBlocks.add(position);
+                    }
+                }
+            }
+        }
+
+        if (!world.generateTree(BukkitAdapter.adapt(world, target), treeType)) {
+            return false;
+        }
+
+        List<BlockState> newBlocks = new ArrayList<>();
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -5; y <= height; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockVector3 position = target.add(x, y, z);
+                    if (!beforeBlocks.contains(position)) {
+                        Block block = world.getBlockAt(position.x(), position.y(), position.z());
+                        if (block.getType() != Material.AIR) {
+                            newBlocks.add(block.getState());
+                        }
+                    }
+                }
+            }
+        }
+
+        for (BlockState blockState : newBlocks) {
+            editSession.setBlock(blockState.getX(), blockState.getY(), blockState.getZ(),
+                    BukkitAdapter.adapt(blockState.getBlockData())
+            );
+        }
+        return !newBlocks.isEmpty();
+    }
+
+    protected <T> T syncRegion(World world, BlockVector3 point, java.util.function.Supplier<T> supplier) {
+        if (!FoliaUtil.isFoliaServer()) {
+            return TaskManager.taskManager().sync(supplier);
+        }
+        if (Bukkit.isOwnedByCurrentRegion(world, point.x() >> 4, point.z() >> 4)) {
+            return supplier.get();
+        }
+        CompletableFuture<T> future = new CompletableFuture<>();
+        Bukkit.getServer().getRegionScheduler().run(
+                WorldEditPlugin.getInstance(),
+                world,
+                point.x() >> 4,
+                point.z() >> 4,
+                task -> {
+                    try {
+                        future.complete(supplier.get());
+                    } catch (Throwable throwable) {
+                        future.completeExceptionally(throwable);
+                    }
+                }
+        );
+        return future.join();
     }
 
     public void mapFromGlobalPalette(char[] data) {

@@ -11,6 +11,7 @@ import com.fastasyncworldedit.core.queue.IQueueChunk;
 import com.fastasyncworldedit.core.queue.IQueueExtent;
 import com.fastasyncworldedit.core.queue.Trimable;
 import com.fastasyncworldedit.core.queue.implementation.chunk.ChunkCache;
+import com.fastasyncworldedit.core.util.FoliaUtil;
 import com.fastasyncworldedit.core.util.MemUtil;
 import com.fastasyncworldedit.core.util.TaskManager;
 import com.fastasyncworldedit.core.util.collection.CleanableThreadLocal;
@@ -106,7 +107,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
 
     @Override
     public void run() {
-        if (!Fawe.isMainThread()) {
+        if (!Fawe.isMainThread() && !FoliaUtil.isFoliaServer()) {
             throw new IllegalStateException("Not main thread");
         }
         if (!syncTasks.isEmpty()) {
@@ -328,7 +329,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Runnable run, T value, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() && !FoliaUtil.isFoliaServer()) {
             run.run();
             return Futures.immediateFuture(value);
         }
@@ -339,7 +340,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Runnable run, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() && !FoliaUtil.isFoliaServer()) {
             run.run();
             return Futures.immediateCancelledFuture();
         }
@@ -350,7 +351,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Callable<T> call, Queue<FutureTask> queue) throws Exception {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() && !FoliaUtil.isFoliaServer()) {
             return Futures.immediateFuture(call.call());
         }
         final FutureTask<T> result = new FutureTask<>(call);
@@ -360,7 +361,7 @@ public abstract class QueueHandler implements Trimable, Runnable {
     }
 
     private <T> Future<T> sync(Supplier<T> call, Queue<FutureTask> queue) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() && !FoliaUtil.isFoliaServer()) {
             return Futures.immediateFuture(call.get());
         }
         final FutureTask<T> result = new FutureTask<>(call::get);

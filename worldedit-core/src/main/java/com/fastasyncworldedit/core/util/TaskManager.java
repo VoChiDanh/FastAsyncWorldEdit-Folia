@@ -330,7 +330,7 @@ public abstract class TaskManager {
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final RunnableVal<T> function) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() || FoliaUtil.isFoliaServer()) {
             function.run();
             return function.value;
         }
@@ -347,7 +347,7 @@ public abstract class TaskManager {
      * - Usually wait time is around 25ms<br>
      */
     public <T> T syncWhenFree(@Nonnull final Supplier<T> supplier) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() || FoliaUtil.isFoliaServer()) {
             return supplier.get();
         }
         try {
@@ -372,7 +372,7 @@ public abstract class TaskManager {
      * - Usually wait time is around 25ms<br>
      */
     public <T> T sync(final Supplier<T> function) {
-        if (Fawe.isMainThread()) {
+        if (Fawe.isMainThread() || FoliaUtil.isFoliaServer()) {
             return function.get();
         }
         try {

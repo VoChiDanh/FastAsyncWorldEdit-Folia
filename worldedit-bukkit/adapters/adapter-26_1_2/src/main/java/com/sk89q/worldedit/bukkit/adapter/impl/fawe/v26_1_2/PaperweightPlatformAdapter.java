@@ -5,6 +5,7 @@ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManage
 import com.fastasyncworldedit.bukkit.adapter.CachedBukkitAdapter;
 import com.fastasyncworldedit.bukkit.adapter.DelegateSemaphore;
 import com.fastasyncworldedit.bukkit.adapter.NMSAdapter;
+import com.fastasyncworldedit.bukkit.util.FoliaSupport;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.core.FaweCache;
 import com.fastasyncworldedit.core.math.BitArrayUnstretched;
@@ -398,6 +399,14 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
             }
         };
 
+        if (FoliaSupport.isFolia()) {
+            FoliaSupport.runAtLocation(
+                    WorldEditPlugin.getInstance(),
+                    new org.bukkit.Location(nmsWorld.getWorld(), chunkX << 4, 0, chunkZ << 4),
+                    sendPacketTask
+            );
+            return;
+        }
         try {
             MinecraftServer.getServer().execute(sendPacketTask);
         } catch (UnsupportedOperationException exception) {
